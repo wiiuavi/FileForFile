@@ -1,0 +1,97 @@
+body {
+    background-color: #1a1a1a;
+    color: #ffffff;
+    font-family: sans-serif;
+    margin: 0;
+    padding: 0;
+}
+.navBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 30px;
+    border-bottom: 2px solid #333;
+    background-color: #1a1a1a;
+}
+.navTitle {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+.navLinks {
+    display: flex;
+    gap: 20px;
+}
+.navLinks a {
+    color: #aaaaaa;
+    text-decoration: none;
+}
+.mainContainer {
+    padding: 30px;
+    background-color: #1a1a1a;
+    min-height: 100vh;
+}
+.controlsContainer {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 30px;
+}
+.searchBar {
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #444;
+    background-color: #2a2a2a;
+    color: white;
+    width: 300px;
+}
+.toggleButton {
+    padding: 10px 15px;
+    background-color: #0055cc;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+.formatGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+}
+.formatGridExpanded {
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 25px;
+}
+.formatCard {
+    border: 2px solid #444;
+    border-radius: 10px;
+    padding: 20px;
+    background-color: #222;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.formatCardExpanded {
+    padding: 25px;
+    gap: 15px;
+    min-height: 150px;
+}
+.cardTitle {
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-align: center;
+    color: white;
+}
+.cardDescription {
+    font-size: 1rem;
+    color: #aaa;
+    display: none;
+    line-height: 1.4;
+}
+.cardDescriptionVisible {
+    display: block;
+}
+.cardDescriptionTruncate {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}

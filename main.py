@@ -1,10 +1,13 @@
+import eel
 import os
 import pandas as pd
-import moviepy.editor as moviepy
+import moviepy
 from PIL import Image
 import docx2pdf
 import markdown
 import pdfkit
+
+eel.init('.')
 
 conversionGraph = {
     "docx": ["pdf", "txt"],
@@ -32,17 +35,42 @@ conversionGraph = {
     "flac": ["mp3", "wav", "ogg"]
 }
 
+formatDescriptions = {
+    "pdf": "Portable Document Format",
+    "mp3": "Standard audio file",
+    "docx": "Word document"
+}
+
+@eel.expose
+def getFileFormats():
+    allFormats = set()
+    for inputType, outputTypes in conversionGraph.items():
+        allFormats.add(inputType)
+        for outputType in outputTypes:
+            allFormats.add(outputType)
+    
+    formatList = []
+    for fmt in sorted(list(allFormats)):
+        formatList.append({
+            "title": fmt.upper(),
+            "description": formatDescriptions.get(fmt, "")
+        })
+    return formatList
+
+@eel.expose
 def getFileExtension(filePath):
     if '.' in filePath:
         return filePath.split('.')[-1].lower()
     return ""
 
+@eel.expose
 def getFormatsICanConvertTo(inputFormat):
     normalizedFormat = inputFormat.lower().replace('.', '')
     if normalizedFormat in conversionGraph:
         return conversionGraph[normalizedFormat]
     return []
 
+@eel.expose
 def getFormatsICanConvertFrom(outputFormat):
     normalizedFormat = outputFormat.lower().replace('.', '')
     supportedInputs = []
@@ -51,6 +79,7 @@ def getFormatsICanConvertFrom(outputFormat):
             supportedInputs.append(inputType)
     return supportedInputs
 
+@eel.expose
 def convertImageToImage(inputFile, outputFile):
     try:
         with Image.open(inputFile) as img:
@@ -60,6 +89,7 @@ def convertImageToImage(inputFile, outputFile):
     except:
         return False
 
+@eel.expose
 def convertVideoToVideo(inputFile, outputFile):
     try:
         clip = moviepy.VideoFileClip(inputFile)
@@ -68,6 +98,7 @@ def convertVideoToVideo(inputFile, outputFile):
     except:
         return False
 
+@eel.expose
 def convertAudioToAudio(inputFile, outputFile):
     try:
         clip = moviepy.AudioFileClip(inputFile)
@@ -76,6 +107,7 @@ def convertAudioToAudio(inputFile, outputFile):
     except:
         return False
 
+@eel.expose
 def convertVideoToAudio(inputFile, outputFile):
     try:
         clip = moviepy.VideoFileClip(inputFile)
@@ -84,6 +116,7 @@ def convertVideoToAudio(inputFile, outputFile):
     except:
         return False
 
+@eel.expose
 def convertTextToText(inputFile, outputFile):
     inExt = getFileExtension(inputFile)
     outExt = getFileExtension(outputFile)
@@ -105,6 +138,7 @@ def convertTextToText(inputFile, outputFile):
     except:
         return False
 
+@eel.expose
 def convertToPdf(inputFile, outputFile):
     inExt = getFileExtension(inputFile)
     try:
@@ -123,3 +157,6 @@ def convertToPdf(inputFile, outputFile):
         return True
     except:
         return False
+
+if __name__ == '__main__':
+    eel.start('index.html', mode='default')
