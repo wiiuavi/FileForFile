@@ -11,18 +11,39 @@
     <div class="navBar">
         <div class="navTitle">File For File</div>
         <div class="navLinks">
-            <a href="#">Conversions</a>
+            <a href="#" id="navConversions">Conversions</a>
             <a href="#">Convert</a>
             <a href="#">Other</a>
         </div>
     </div>
     
-    <div class="mainContainer">
+    <div id="mainView" class="mainContainer">
         <div class="controlsContainer">
             <input type="text" id="searchInput" class="searchBar" placeholder="Search formats...">
             <button id="toggleDetailsBtn" class="toggleButton">Show Details</button>
         </div>
         <div id="formatGrid" class="formatGrid"></div>
+    </div>
+
+    <div id="infoView" class="mainContainer hidden">
+        <button id="backBtn" class="toggleButton backButton">← Back to all</button>
+        
+        <div class="infoLayout">
+            <div class="sidePanel">
+                <div class="panelHeader">convert from:</div>
+                <div id="convertFromList" class="bubbleList"></div>
+            </div>
+            
+            <div class="centerPanel">
+                <div id="infoTitle" class="infoTitle"></div>
+                <div id="infoDesc" class="infoDesc"></div>
+            </div>
+            
+            <div class="sidePanel">
+                <div class="panelHeader">convert to:</div>
+                <div id="convertToList" class="bubbleList"></div>
+            </div>
+        </div>
     </div>
 
     <script src="script.js"></script>

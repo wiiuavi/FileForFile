@@ -5,6 +5,9 @@ body {
     margin: 0;
     padding: 0;
 }
+.hidden {
+    display: none !important;
+}
 .navBar {
     display: flex;
     justify-content: space-between;
@@ -51,6 +54,13 @@ body {
     border-radius: 5px;
     cursor: pointer;
 }
+.backButton {
+    margin-bottom: 30px;
+    background-color: #444;
+}
+.backButton:hover {
+    background-color: #555;
+}
 .formatGrid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -68,6 +78,12 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+.formatCard:hover {
+    background-color: #2a2a2a;
+    border-color: #66b3ff;
 }
 .formatCardExpanded {
     padding: 25px;
@@ -75,7 +91,7 @@ body {
     min-height: 150px;
 }
 .cardTitle {
-    font-size: 1.5rem;
+    font-size: 1.2rem;
     font-weight: bold;
     text-align: center;
     color: white;
@@ -94,4 +110,72 @@ body {
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
+}
+
+/* Format Info View Styles */
+.infoLayout {
+    display: flex;
+    justify-content: space-between;
+    gap: 40px;
+    border: 2px solid #333;
+    padding: 40px;
+    border-radius: 10px;
+    background-color: #1e1e1e;
+}
+.sidePanel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.centerPanel {
+    flex: 1.5;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-left: 2px solid #333;
+    border-right: 2px solid #333;
+    padding: 0 20px;
+}
+.panelHeader {
+    font-size: 1.2rem;
+    color: #aaaaaa;
+    margin-bottom: 25px;
+    font-weight: bold;
+}
+.infoTitle {
+    font-size: 3rem;
+    font-weight: bold;
+    color: white;
+    margin-bottom: 20px;
+}
+.infoDesc {
+    font-size: 1.1rem;
+    color: #aaaaaa;
+    line-height: 1.6;
+}
+.bubbleList {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 100%;
+    align-items: center;
+}
+.formatBubble {
+    width: 200px; /* Matches the collapsed card size */
+    border: 2px solid #444;
+    border-radius: 50px; /* Gives it the circular/bubble pill shape from the sketch */
+    padding: 15px;
+    background-color: #222;
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.2rem;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+.formatBubble:hover {
+    background-color: #2a2a2a;
+    border-color: #66b3ff;
 }
