@@ -12,7 +12,7 @@
         <div class="navTitle">File For File</div>
         <div class="navLinks">
             <a href="#" id="navConversions">Conversions</a>
-            <a href="#">Convert</a>
+            <a href="#" id="navConvert">Convert</a>
             <a href="#">Other</a>
         </div>
     </div>
@@ -42,6 +42,32 @@
             <div class="sidePanel">
                 <div class="panelHeader">convert to:</div>
                 <div id="convertToList" class="bubbleList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="convertView" class="mainContainer hidden">
+        <div id="dropZone" class="dropZone">
+            drag and drop (will load to memory), or <span id="selectFilesText">select file(s)</span>
+        </div>
+        
+        <div class="convertLayout">
+            <div class="convertCol">
+                <div class="panelHeader">File(s) selected:</div>
+                <div id="selectedFilesList" class="fileList"></div>
+            </div>
+            
+            <div class="convertCol centerCol">
+                <div class="panelHeader">convert to:</div>
+                <input type="text" id="convertSearchInput" class="searchBar convertSearch" placeholder="Search...">
+                <div id="convertTargetList" class="bubbleList rowBubbles"></div>
+            </div>
+            
+            <div class="convertCol">
+                <div class="panelHeader">Options</div>
+                <div class="optionsContainer">
+                    <button id="executeConvertBtn" class="toggleButton executeBtn">convert</button>
+                </div>
             </div>
         </div>
     </div>

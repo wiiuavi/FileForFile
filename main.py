@@ -6,6 +6,8 @@ from PIL import Image
 import docx2pdf
 import markdown
 import pdfkit
+import tkinter as tk
+from tkinter import filedialog
 
 eel.init('.')
 
@@ -157,6 +159,14 @@ def convertToPdf(inputFile, outputFile):
         return True
     except:
         return False
+
+@eel.expose
+def askForFiles():
+    root = tk.Tk()
+    root.attributes('-topmost', True)
+    root.withdraw()
+    filePaths = filedialog.askopenfilenames()
+    return list(filePaths)
 
 if __name__ == '__main__':
     eel.start('index.html', mode='default')
