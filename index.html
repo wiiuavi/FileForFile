@@ -13,7 +13,7 @@
         <div class="navLinks">
             <a href="#" id="navConversions">Conversions</a>
             <a href="#" id="navConvert">Convert</a>
-            <a href="#">Other</a>
+            <a href="#" id="navOther">Other</a>
         </div>
     </div>
     
@@ -68,6 +68,27 @@
                 <div class="optionsContainer">
                     <button id="executeConvertBtn" class="toggleButton executeBtn">convert</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="otherView" class="mainContainer hidden">
+        <div class="settingsHeader">settings</div>
+        <div class="settingsLayout">
+            <div class="settingRow">
+                <span class="settingLabel">Dark / light theme</span>
+                <select id="themeSelect" class="settingSelect">
+                    <option value="dark">Dark</option>
+                    <option value="light">Light</option>
+                </select>
+            </div>
+            <div class="settingRow">
+                <span class="settingLabel">Default save location</span>
+                <select id="saveLocationSelect" class="settingSelect">
+                    <option value="downloads">Downloads</option>
+                    <option value="scriptFolder">Folder where script resides</option>
+                    <option value="customFolder">Folder of choice...</option>
+                </select>
             </div>
         </div>
     </div>

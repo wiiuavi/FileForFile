@@ -168,5 +168,13 @@ def askForFiles():
     filePaths = filedialog.askopenfilenames()
     return list(filePaths)
 
+@eel.expose
+def askForFolder():
+    root = tk.Tk()
+    root.attributes('-topmost', True)
+    root.withdraw()
+    folderPath = filedialog.askdirectory()
+    return folderPath
+
 if __name__ == '__main__':
     eel.start('index.html', mode='default')

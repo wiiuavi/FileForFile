@@ -74,8 +74,7 @@ function toggleDetails() {
 }
 
 async function loadFormatInfo(formatTitle) {
-    document.getElementById('mainView').classList.add('hidden');
-    document.getElementById('convertView').classList.add('hidden');
+    hideAllViews();
     document.getElementById('infoView').classList.remove('hidden');
     
     const formatObj = allFormats.find(f => f.title === formatTitle);
@@ -114,9 +113,15 @@ function renderBubbles(containerId, formatList) {
     });
 }
 
-function showMainView() {
+function hideAllViews() {
+    document.getElementById('mainView').classList.add('hidden');
     document.getElementById('infoView').classList.add('hidden');
     document.getElementById('convertView').classList.add('hidden');
+    document.getElementById('otherView').classList.add('hidden');
+}
+
+function showMainView() {
+    hideAllViews();
     document.getElementById('mainView').classList.remove('hidden');
 }
 
@@ -130,14 +135,24 @@ document.getElementById('navConversions').addEventListener('click', (e) => {
 
 let currentSelectedFiles = [];
 let possibleConvertTargets = [];
+let selectedTargetFormat = "";
+let customSaveFolderPath = "";
 
 const navConvertBtn = document.getElementById('navConvert');
 if (navConvertBtn) {
     navConvertBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        document.getElementById('mainView').classList.add('hidden');
-        document.getElementById('infoView').classList.add('hidden');
+        hideAllViews();
         document.getElementById('convertView').classList.remove('hidden');
+    });
+}
+
+const navOtherBtn = document.getElementById('navOther');
+if (navOtherBtn) {
+    navOtherBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        hideAllViews();
+        document.getElementById('otherView').classList.remove('hidden');
     });
 }
 
@@ -179,6 +194,7 @@ async function processSelectedFiles(paths) {
     }
 
     currentSelectedFiles = paths;
+    selectedTargetFormat = "";
     const listElement = document.getElementById('selectedFilesList');
     if (listElement) {
         listElement.innerHTML = '';
@@ -202,8 +218,18 @@ function renderConvertTargets(targetsToRender) {
     
     targetsToRender.forEach(fmt => {
         const bubble = document.createElement('div');
-        bubble.className = 'formatBubble';
+        let bubbleClass = 'formatBubble';
+        if (selectedTargetFormat === fmt.title) {
+            bubbleClass += ' formatBubbleSelected';
+        }
+        bubble.className = bubbleClass;
         bubble.textContent = fmt.title;
+        
+        bubble.addEventListener('click', () => {
+            selectedTargetFormat = fmt.title;
+            renderConvertTargets(targetsToRender);
+        });
+        
         container.appendChild(bubble);
     });
 }
@@ -244,6 +270,33 @@ if (dropZone) {
         dropZone.style.borderColor = '#444';
         let paths = Array.from(e.dataTransfer.files).map(f => f.name);
         processSelectedFiles(paths);
+    });
+}
+
+const themeSelect = document.getElementById('themeSelect');
+if (themeSelect) {
+    themeSelect.addEventListener('change', (e) => {
+        if (e.target.value === 'light') {
+            document.body.classList.add('lightTheme');
+        } else {
+            document.body.classList.remove('lightTheme');
+        }
+    });
+}
+
+const saveLocationSelect = document.getElementById('saveLocationSelect');
+if (saveLocationSelect) {
+    saveLocationSelect.addEventListener('change', async (e) => {
+        if (e.target.value === 'customFolder') {
+            if (window.eel) {
+                const folder = await eel.askForFolder()();
+                if (folder) {
+                    customSaveFolderPath = folder;
+                } else {
+                    saveLocationSelect.value = 'downloads';
+                }
+            }
+        }
     });
 }
 
