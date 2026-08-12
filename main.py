@@ -8,6 +8,8 @@ import markdown
 import pdfkit
 import tkinter as tk
 from tkinter import filedialog
+import platform
+import sys
 
 eel.init('.')
 
@@ -87,36 +89,36 @@ def convertImageToImage(inputFile, outputFile):
         with Image.open(inputFile) as img:
             rgbImg = img.convert("RGB")
             rgbImg.save(outputFile)
-        return True
-    except:
-        return False
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
 @eel.expose
 def convertVideoToVideo(inputFile, outputFile):
     try:
         clip = moviepy.VideoFileClip(inputFile)
         clip.write_videofile(outputFile)
-        return True
-    except:
-        return False
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
 @eel.expose
 def convertAudioToAudio(inputFile, outputFile):
     try:
         clip = moviepy.AudioFileClip(inputFile)
         clip.write_audiofile(outputFile)
-        return True
-    except:
-        return False
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
 @eel.expose
 def convertVideoToAudio(inputFile, outputFile):
     try:
         clip = moviepy.VideoFileClip(inputFile)
         clip.audio.write_audiofile(outputFile)
-        return True
-    except:
-        return False
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
 @eel.expose
 def convertTextToText(inputFile, outputFile):
@@ -136,9 +138,9 @@ def convertTextToText(inputFile, outputFile):
                 content = inFile.read()
             with open(outputFile, 'w', encoding='utf-8') as outFile:
                 outFile.write(content)
-        return True
-    except:
-        return False
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
 @eel.expose
 def convertToPdf(inputFile, outputFile):
@@ -146,19 +148,49 @@ def convertToPdf(inputFile, outputFile):
     try:
         if inExt == 'docx':
             docx2pdf.convert(inputFile, outputFile)
-        elif inExt in ['jpg', 'jpeg', 'png', 'webp']:
+        elif inExt in ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif', 'tiff', 'ico']:
             with Image.open(inputFile) as img:
                 rgbImg = img.convert("RGB")
                 rgbImg.save(outputFile, "PDF")
-        elif inExt == 'md':
-            with open(inputFile, 'r', encoding='utf-8') as f:
-                htmlText = markdown.markdown(f.read())
-            pdfkit.from_string(htmlText, outputFile)
-        elif inExt in ['txt', 'rtf', 'html']:
-            pdfkit.from_file(inputFile, outputFile)
-        return True
-    except:
-        return False
+        else:
+            pdfConfig = None
+            if platform.system() == 'Windows':
+                baseDir = os.path.dirname(os.path.abspath(__file__))
+                if getattr(sys, 'frozen', False):
+                    baseDir = os.path.dirname(sys.executable)
+                
+                expectedPath = os.path.join(baseDir, 'bin', 'wkhtmltopdf.exe')
+                
+                if os.path.exists(expectedPath):
+                    pdfConfig = pdfkit.configuration(wkhtmltopdf=expectedPath)
+                else:
+                    return False, "wkhtmltopdf.exe missing from bin folder"
+            
+            if inExt == 'md':
+                with open(inputFile, 'r', encoding='utf-8') as f:
+                    htmlText = markdown.markdown(f.read())
+                htmlWrapper = f'<html><head><meta charset="utf-8"></head><body>{htmlText}</body></html>'
+                if pdfConfig:
+                    pdfkit.from_string(htmlWrapper, outputFile, configuration=pdfConfig)
+                else:
+                    pdfkit.from_string(htmlWrapper, outputFile)
+            elif inExt == 'txt':
+                with open(inputFile, 'r', encoding='utf-8') as f:
+                    txtContent = f.read()
+                safeTxt = txtContent.replace('<', '&lt;').replace('>', '&gt;')
+                htmlWrapper = f'<html><head><meta charset="utf-8"></head><body><pre style="white-space: pre-wrap; word-wrap: break-word; font-family: sans-serif;">{safeTxt}</pre></body></html>'
+                if pdfConfig:
+                    pdfkit.from_string(htmlWrapper, outputFile, configuration=pdfConfig)
+                else:
+                    pdfkit.from_string(htmlWrapper, outputFile)
+            elif inExt in ['rtf', 'html']:
+                if pdfConfig:
+                    pdfkit.from_file(inputFile, outputFile, configuration=pdfConfig)
+                else:
+                    pdfkit.from_file(inputFile, outputFile)
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
 @eel.expose
 def askForFiles():
@@ -175,6 +207,66 @@ def askForFolder():
     root.withdraw()
     folderPath = filedialog.askdirectory()
     return folderPath
+
+@eel.expose
+def getDownloadsPath():
+    return os.path.expanduser('~/Downloads')
+
+@eel.expose
+def getScriptPath():
+    return os.path.abspath(os.path.dirname(__file__))
+
+@eel.expose
+def executeConversion(filePaths, targetFormat, saveLocationType, customPath):
+    try:
+        targetFormat = targetFormat.lower()
+        outputFolder = ""
+        
+        if saveLocationType == 'downloads':
+            outputFolder = os.path.expanduser('~/Downloads')
+        elif saveLocationType == 'scriptFolder':
+            outputFolder = os.path.abspath(os.path.dirname(__file__))
+        elif saveLocationType == 'customFolder':
+            outputFolder = customPath
+            
+        if not os.path.exists(outputFolder):
+            return {'status': 'error', 'message': 'Output folder does not exist'}
+            
+        imageFormats = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif', 'tiff', 'ico']
+        videoFormats = ['mp4', 'avi', 'mkv', 'mov', 'webm']
+        audioFormats = ['mp3', 'wav', 'ogg', 'flac']
+        textFormats = ['txt', 'md', 'csv', 'json', 'html', 'rtf', 'docx', 'xlsx']
+        
+        for path in filePaths:
+            fileName = os.path.basename(path)
+            baseName = os.path.splitext(fileName)[0]
+            inExt = os.path.splitext(fileName)[1].lower().replace('.', '')
+            
+            outputFile = os.path.join(outputFolder, baseName + '.' + targetFormat)
+            success = False
+            errMsg = "Unknown conversion error"
+            
+            if targetFormat == 'pdf':
+                success, errMsg = convertToPdf(path, outputFile)
+            elif inExt in imageFormats and targetFormat in imageFormats:
+                success, errMsg = convertImageToImage(path, outputFile)
+            elif inExt in videoFormats and targetFormat in videoFormats:
+                success, errMsg = convertVideoToVideo(path, outputFile)
+            elif inExt in audioFormats and targetFormat in audioFormats:
+                success, errMsg = convertAudioToAudio(path, outputFile)
+            elif inExt in videoFormats and targetFormat in audioFormats:
+                success, errMsg = convertVideoToAudio(path, outputFile)
+            elif inExt in textFormats and targetFormat in textFormats:
+                success, errMsg = convertTextToText(path, outputFile)
+            elif inExt == 'gif' and targetFormat in videoFormats:
+                success, errMsg = convertVideoToVideo(path, outputFile)
+            
+            if not success:
+                return {'status': 'error', 'message': f'Failed {fileName}: {errMsg}'}
+                
+        return {'status': 'success', 'message': 'Conversion successful!'}
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}
 
 if __name__ == '__main__':
     eel.start('index.html', mode='default')

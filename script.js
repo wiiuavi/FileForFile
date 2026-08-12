@@ -137,6 +137,71 @@ let currentSelectedFiles = [];
 let possibleConvertTargets = [];
 let selectedTargetFormat = "";
 let customSaveFolderPath = "";
+let systemDownloadsPath = "";
+let scriptFolderPath = "";
+
+async function initializeApp() {
+    if (window.eel) {
+        allFormats = await eel.getFileFormats()();
+        systemDownloadsPath = await eel.getDownloadsPath()();
+        scriptFolderPath = await eel.getScriptPath()();
+    } else {
+        allFormats = [
+            {title: "PDF", description: "Portable Document Format"},
+            {title: "MP3", description: "Standard audio file"},
+            {title: "DOCX", description: "Word document"}
+        ];
+    }
+    
+    const savedTheme = localStorage.getItem('themeSelectPref');
+    if (savedTheme) {
+        const themeSelect = document.getElementById('themeSelect');
+        if (themeSelect) themeSelect.value = savedTheme;
+        if (savedTheme === 'light') {
+            document.body.classList.add('lightTheme');
+        } else {
+            document.body.classList.remove('lightTheme');
+        }
+    }
+    
+    const savedLoc = localStorage.getItem('saveLocationPref');
+    if (savedLoc) {
+        const saveLocationSelect = document.getElementById('saveLocationSelect');
+        if (saveLocationSelect) saveLocationSelect.value = savedLoc;
+    }
+    
+    const savedCustomPath = localStorage.getItem('customSaveFolderPathPref');
+    if (savedCustomPath) {
+        customSaveFolderPath = savedCustomPath;
+    }
+    
+    renderGrid(allFormats);
+    updatePathDisplay();
+}
+
+function updatePathDisplay() {
+    const pathDisplay = document.getElementById('saveLocationPath');
+    const convertPathDisplay = document.getElementById('convertSavePathText');
+    
+    const val = document.getElementById('saveLocationSelect') ? document.getElementById('saveLocationSelect').value : 'downloads';
+    
+    let pathString = "";
+    
+    if (val === 'downloads') {
+        pathString = systemDownloadsPath;
+    } else if (val === 'scriptFolder') {
+        pathString = scriptFolderPath;
+    } else if (val === 'customFolder') {
+        pathString = customSaveFolderPath || "No folder selected";
+    }
+    
+    if (pathDisplay) {
+        pathDisplay.textContent = pathString;
+    }
+    if (convertPathDisplay) {
+        convertPathDisplay.textContent = "Files will be saved to: " + pathString;
+    }
+}
 
 const navConvertBtn = document.getElementById('navConvert');
 if (navConvertBtn) {
@@ -255,6 +320,37 @@ if (convertSearchInput) {
     });
 }
 
+const executeConvertBtn = document.getElementById('executeConvertBtn');
+if (executeConvertBtn) {
+    executeConvertBtn.addEventListener('click', async () => {
+        if (currentSelectedFiles.length === 0) {
+            alert("Please select files first.");
+            return;
+        }
+        if (!selectedTargetFormat) {
+            alert("Please select a format to convert to.");
+            return;
+        }
+        
+        const statusMsg = document.getElementById('convertStatusMessage');
+        statusMsg.textContent = "converting...";
+        statusMsg.className = "convertStatus statusConverting";
+        
+        if (window.eel) {
+            const saveLocType = document.getElementById('saveLocationSelect').value;
+            const result = await eel.executeConversion(currentSelectedFiles, selectedTargetFormat, saveLocType, customSaveFolderPath)();
+            
+            if (result.status === 'success') {
+                statusMsg.textContent = result.message;
+                statusMsg.className = "convertStatus statusSuccess";
+            } else {
+                statusMsg.textContent = "Failed: " + result.message;
+                statusMsg.className = "convertStatus statusError";
+            }
+        }
+    });
+}
+
 const dropZone = document.getElementById('dropZone');
 if (dropZone) {
     dropZone.addEventListener('dragover', (e) => {
@@ -276,6 +372,7 @@ if (dropZone) {
 const themeSelect = document.getElementById('themeSelect');
 if (themeSelect) {
     themeSelect.addEventListener('change', (e) => {
+        localStorage.setItem('themeSelectPref', e.target.value);
         if (e.target.value === 'light') {
             document.body.classList.add('lightTheme');
         } else {
@@ -292,11 +389,16 @@ if (saveLocationSelect) {
                 const folder = await eel.askForFolder()();
                 if (folder) {
                     customSaveFolderPath = folder;
+                    localStorage.setItem('customSaveFolderPathPref', folder);
+                    localStorage.setItem('saveLocationPref', e.target.value);
                 } else {
-                    saveLocationSelect.value = 'downloads';
+                    saveLocationSelect.value = localStorage.getItem('saveLocationPref') || 'downloads';
                 }
             }
+        } else {
+            localStorage.setItem('saveLocationPref', e.target.value);
         }
+        updatePathDisplay();
     });
 }
 
