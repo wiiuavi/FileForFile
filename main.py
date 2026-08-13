@@ -6,6 +6,7 @@ from PIL import Image
 import docx2pdf
 import markdown
 import pdfkit
+import imgkit
 import tkinter as tk
 from tkinter import filedialog
 import platform
@@ -22,7 +23,7 @@ conversionGraph = {
     "md": ["pdf", "txt", "html"],
     "csv": ["xlsx", "json", "txt"],
     "json": ["csv", "txt", "xlsx"],
-    "html": ["pdf", "txt"],
+    "html": ["pdf", "txt", "jpg", "jpeg", "png"],
     "jpg": ["jpeg", "png", "webp", "bmp", "gif", "tiff", "ico", "pdf"],
     "jpeg": ["jpg", "png", "webp", "bmp", "gif", "tiff", "ico", "pdf"],
     "png": ["jpg", "jpeg", "webp", "bmp", "gif", "tiff", "ico", "pdf"],
@@ -143,6 +144,26 @@ def convertTextToText(inputFile, outputFile):
         return False, str(e)
 
 @eel.expose
+def convertHtmlToImage(inputFile, outputFile):
+    try:
+        imgConfig = None
+        if platform.system() == 'Windows':
+            baseDir = os.path.dirname(os.path.abspath(__file__))
+            if getattr(sys, 'frozen', False):
+                baseDir = os.path.dirname(sys.executable)
+            expectedPath = os.path.join(baseDir, 'bin', 'wkhtmltoimage.exe')
+            if os.path.exists(expectedPath):
+                imgConfig = imgkit.config(wkhtmltoimage=expectedPath)
+        
+        if imgConfig:
+            imgkit.from_file(inputFile, outputFile, config=imgConfig)
+        else:
+            imgkit.from_file(inputFile, outputFile)
+        return True, ""
+    except Exception as e:
+        return False, str(e)
+
+@eel.expose
 def convertToPdf(inputFile, outputFile):
     inExt = getFileExtension(inputFile)
     try:
@@ -158,13 +179,9 @@ def convertToPdf(inputFile, outputFile):
                 baseDir = os.path.dirname(os.path.abspath(__file__))
                 if getattr(sys, 'frozen', False):
                     baseDir = os.path.dirname(sys.executable)
-                
                 expectedPath = os.path.join(baseDir, 'bin', 'wkhtmltopdf.exe')
-                
                 if os.path.exists(expectedPath):
                     pdfConfig = pdfkit.configuration(wkhtmltopdf=expectedPath)
-                else:
-                    return False, "wkhtmltopdf.exe missing from bin folder"
             
             if inExt == 'md':
                 with open(inputFile, 'r', encoding='utf-8') as f:
@@ -248,6 +265,8 @@ def executeConversion(filePaths, targetFormat, saveLocationType, customPath):
             
             if targetFormat == 'pdf':
                 success, errMsg = convertToPdf(path, outputFile)
+            elif inExt == 'html' and targetFormat in imageFormats:
+                success, errMsg = convertHtmlToImage(path, outputFile)
             elif inExt in imageFormats and targetFormat in imageFormats:
                 success, errMsg = convertImageToImage(path, outputFile)
             elif inExt in videoFormats and targetFormat in videoFormats:
