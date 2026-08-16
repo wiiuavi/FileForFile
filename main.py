@@ -1,18 +1,135 @@
-import eel
 import os
+import sys
+import platform
+import threading
+import tempfile
+import socket
+import json
+import time
+import winreg
+import ctypes
 import pandas as pd
-import moviepy
 from PIL import Image
 import docx2pdf
 import markdown
 import pdfkit
 import imgkit
-import tkinter as tk
-from tkinter import filedialog
-import platform
-import sys
+import eel
+import moviepy
 
-eel.init('.')
+try:
+    import pystray
+except ImportError:
+    pystray = None
+
+eel.init(os.path.dirname(os.path.abspath(__file__)))
+
+keepBackground = False
+trayIcon = None
+startupSelectedFiles = []
+startupQueueFile = os.path.join(tempfile.gettempdir(), "FileForFile-startup.json")
+
+IMAGE_FORMATS = {"jpg", "jpeg", "png", "webp", "bmp", "gif", "tiff", "ico"}
+VIDEO_FORMATS = {"mp4", "avi", "mkv", "mov", "webm"}
+AUDIO_FORMATS = {"mp3", "wav", "ogg", "flac"}
+DOCUMENT_FORMATS = {"docx", "xlsx", "pptx", "txt", "rtf", "md", "csv", "json", "html"}
+
+def deleteRegistryKey(key, subKey):
+    try:
+        openKey = winreg.OpenKey(key, subKey, 0, winreg.KEY_ALL_ACCESS)
+        info = winreg.QueryInfoKey(openKey)
+        for i in range(info[0]):
+            sub = winreg.EnumKey(openKey, 0)
+            deleteRegistryKey(openKey, sub)
+        winreg.CloseKey(openKey)
+        winreg.DeleteKey(key, subKey)
+    except OSError:
+        pass
+
+def getContextMenuIconPath():
+    baseDir = os.path.dirname(os.path.abspath(__file__))
+    pngPath = os.path.join(baseDir, "icon.png")
+    icoPath = os.path.join(baseDir, "icon.ico")
+
+    if os.path.exists(pngPath):
+        try:
+            needsUpdate = not os.path.exists(icoPath) or os.path.getmtime(icoPath) < os.path.getmtime(pngPath)
+            if needsUpdate:
+                image = Image.open(pngPath)
+                image.save(icoPath, format="ICO", sizes=[(16, 16), (32, 32), (48, 48), (64, 64)])
+        except Exception:
+            return pngPath
+
+    if os.path.exists(icoPath):
+        return icoPath
+    return pngPath
+
+def getContextMenuLabel(extension):
+    if extension in IMAGE_FORMATS:
+        return "Image Conversions"
+    if extension in VIDEO_FORMATS:
+        return "Video Conversions"
+    if extension in AUDIO_FORMATS:
+        return "Audio Conversions"
+    if extension in DOCUMENT_FORMATS:
+        return "Document Conversions"
+    return "File Conversions"
+
+@eel.expose
+def setBackgroundMode(val):
+    global keepBackground
+    keepBackground = val
+
+@eel.expose
+def getStartupFiles():
+    return startupSelectedFiles
+
+@eel.expose
+def clearStartupFiles():
+    global startupSelectedFiles
+    startupSelectedFiles = []
+
+def isAppAlreadyRunning():
+    try:
+        with socket.create_connection(("127.0.0.1", 8000), timeout=0.2):
+            return True
+    except OSError:
+        return False
+
+def writeStartupFiles(filePaths):
+    try:
+        with open(startupQueueFile, "w", encoding="utf-8") as fileHandle:
+            json.dump(filePaths, fileHandle)
+        return True
+    except OSError:
+        return False
+
+def readStartupFilesFromQueue():
+    try:
+        if not os.path.exists(startupQueueFile):
+            return []
+        with open(startupQueueFile, "r", encoding="utf-8") as fileHandle:
+            filePaths = json.load(fileHandle)
+        os.remove(startupQueueFile)
+        return [path for path in filePaths if os.path.exists(path)]
+    except Exception:
+        return []
+
+def watchStartupQueue():
+    global startupSelectedFiles
+    lastSeenMtime = 0
+    while True:
+        try:
+            if os.path.exists(startupQueueFile):
+                currentMtime = os.path.getmtime(startupQueueFile)
+                if currentMtime > lastSeenMtime:
+                    lastSeenMtime = currentMtime
+                    queuedFiles = readStartupFilesFromQueue()
+                    if queuedFiles:
+                        startupSelectedFiles = queuedFiles[:1]
+            time.sleep(0.5)
+        except Exception:
+            time.sleep(0.5)
 
 conversionGraph = {
     "docx": ["pdf", "txt"],
@@ -47,13 +164,49 @@ formatDescriptions = {
 }
 
 @eel.expose
+def toggleRegistryContextMenu(enable):
+    try:
+        iconPath = getContextMenuIconPath()
+        exePath = sys.executable
+        scriptPath = os.path.abspath(__file__)
+        isFrozen = getattr(sys, 'frozen', False)
+        
+        for ext, targets in conversionGraph.items():
+            basePath = f"Software\\Classes\\SystemFileAssociations\\.{ext}\\shell\\FileForFile"
+            if enable:
+                key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, basePath)
+                winreg.SetValueEx(key, "MUIVerb", 0, winreg.REG_SZ, "FileForFile")
+                if os.path.exists(iconPath):
+                    winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, iconPath)
+
+                cmdKey = winreg.CreateKey(key, "command")
+                if isFrozen:
+                    cmd = f'"{exePath}" "%1"'
+                else:
+                    cmd = f'"{exePath}" "{scriptPath}" "%1"'
+
+                winreg.SetValue(cmdKey, "", winreg.REG_SZ, cmd)
+                winreg.CloseKey(cmdKey)
+                
+                winreg.CloseKey(key)
+            else:
+                deleteRegistryKey(winreg.HKEY_CURRENT_USER, basePath)
+        return True, ""
+    except Exception as e:
+        return False, str(e)
+
+def getFileExtension(filePath):
+    if '.' in filePath:
+        return filePath.split('.')[-1].lower()
+    return ""
+
+@eel.expose
 def getFileFormats():
     allFormats = set()
     for inputType, outputTypes in conversionGraph.items():
         allFormats.add(inputType)
         for outputType in outputTypes:
             allFormats.add(outputType)
-    
     formatList = []
     for fmt in sorted(list(allFormats)):
         formatList.append({
@@ -61,12 +214,6 @@ def getFileFormats():
             "description": formatDescriptions.get(fmt, "")
         })
     return formatList
-
-@eel.expose
-def getFileExtension(filePath):
-    if '.' in filePath:
-        return filePath.split('.')[-1].lower()
-    return ""
 
 @eel.expose
 def getFormatsICanConvertTo(inputFormat):
@@ -209,6 +356,9 @@ def convertToPdf(inputFile, outputFile):
     except Exception as e:
         return False, str(e)
 
+import tkinter as tk
+from tkinter import filedialog
+
 @eel.expose
 def askForFiles():
     root = tk.Tk()
@@ -287,5 +437,79 @@ def executeConversion(filePaths, targetFormat, saveLocationType, customPath):
     except Exception as e:
         return {'status': 'error', 'message': str(e)}
 
+def showMessage(title, msg):
+    ctypes.windll.user32.MessageBoxW(0, msg, title, 0)
+
+def openPage(icon, item):
+    eel.show('index.html')
+
+def quitApp(icon, item):
+    if trayIcon:
+        trayIcon.stop()
+    os._exit(0)
+
+def setupTray():
+    global trayIcon
+    if not pystray:
+        return
+    try:
+        iconPath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png")
+        if os.path.exists(iconPath):
+            image = Image.open(iconPath)
+        else:
+            image = Image.new('RGB', (64, 64), color='blue')
+        
+        menu = pystray.Menu(
+            pystray.MenuItem("Open FileForFile", openPage, default=True),
+            pystray.MenuItem("Close Script", quitApp)
+        )
+        trayIcon = pystray.Icon("FileForFile", image, "FileForFile", menu)
+        trayIcon.run()
+    except Exception as e:
+        pass
+
+def handleClose(page, sockets):
+    if not keepBackground:
+        if trayIcon:
+            trayIcon.stop()
+        os._exit(0)
+
 if __name__ == '__main__':
-    eel.start('index.html', mode='default')
+    args = [arg for arg in sys.argv[1:] if not arg.startswith('--')]
+    startupSelectedFiles = [os.path.abspath(arg) for arg in args if os.path.exists(arg)][:1]
+
+    if isAppAlreadyRunning():
+        if startupSelectedFiles:
+            writeStartupFiles(startupSelectedFiles)
+        sys.exit(0)
+
+    if os.path.exists(startupQueueFile):
+        try:
+            os.remove(startupQueueFile)
+        except OSError:
+            pass
+
+    if '--context' in sys.argv:
+        try:
+            idx = sys.argv.index('--context')
+            if idx + 2 < len(sys.argv):
+                filePath = sys.argv[idx + 1]
+                targetFmt = sys.argv[idx + 2]
+                outDir = os.path.dirname(filePath)
+                res = executeConversion([filePath], targetFmt, 'customFolder', outDir)
+                if res['status'] == 'success':
+                    showMessage("Success", f"Converted to .{targetFmt} successfully!")
+                else:
+                    showMessage("Error", res['message'])
+        except Exception as ex:
+            showMessage("Error", str(ex))
+        sys.exit(0)
+        
+    if pystray:
+        threading.Thread(target=setupTray, daemon=True).start()
+    threading.Thread(target=watchStartupQueue, daemon=True).start()
+    
+    eel.start('index.html', mode='default', block=False, close_callback=handleClose)
+    
+    while True:
+        eel.sleep(1.0)

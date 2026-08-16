@@ -1,144 +1,13 @@
 let allFormats = [];
 let detailsVisible = false;
-
-async function initializeApp() {
-    if (window.eel) {
-        allFormats = await eel.getFileFormats()();
-    } else {
-        allFormats = [
-            {title: "PDF", description: "Portable Document Format"},
-            {title: "MP3", description: "Standard audio file"},
-            {title: "DOCX", description: "Word document"}
-        ];
-    }
-    renderGrid(allFormats);
-}
-
-function renderGrid(dataToRender) {
-    const gridElement = document.getElementById('formatGrid');
-    gridElement.innerHTML = '';
-    
-    if (detailsVisible) {
-        gridElement.classList.add('formatGridExpanded');
-    } else {
-        gridElement.classList.remove('formatGridExpanded');
-    }
-    
-    dataToRender.forEach(formatObj => {
-        const card = document.createElement('div');
-        let cardClass = 'formatCard';
-        if (detailsVisible) {
-            cardClass += ' formatCardExpanded';
-        }
-        card.className = cardClass;
-        
-        card.addEventListener('click', () => loadFormatInfo(formatObj.title));
-        
-        const title = document.createElement('div');
-        title.className = 'cardTitle';
-        title.textContent = formatObj.title;
-        
-        const description = document.createElement('div');
-        let descClass = 'cardDescription';
-        if (detailsVisible) {
-            descClass += ' cardDescriptionVisible cardDescriptionTruncate';
-        }
-        description.className = descClass;
-        description.textContent = formatObj.description;
-        
-        card.appendChild(title);
-        card.appendChild(description);
-        gridElement.appendChild(card);
-    });
-}
-
-function handleSearch() {
-    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-    const filteredData = allFormats.filter(formatObj => {
-        const titleMatch = formatObj.title.toLowerCase().includes(searchTerm);
-        const descMatch = formatObj.description.toLowerCase().includes(searchTerm);
-        return titleMatch || descMatch;
-    });
-    renderGrid(filteredData);
-}
-
-function toggleDetails() {
-    detailsVisible = !detailsVisible;
-    const btn = document.getElementById('toggleDetailsBtn');
-    if (detailsVisible) {
-        btn.textContent = 'Hide Details';
-    } else {
-        btn.textContent = 'Show Details';
-    }
-    handleSearch();
-}
-
-async function loadFormatInfo(formatTitle) {
-    hideAllViews();
-    document.getElementById('infoView').classList.remove('hidden');
-    
-    const formatObj = allFormats.find(f => f.title === formatTitle);
-    document.getElementById('infoTitle').textContent = formatTitle;
-    document.getElementById('infoDesc').textContent = formatObj ? formatObj.description : "No description available.";
-    
-    let convertFrom = [];
-    let convertTo = [];
-    
-    if (window.eel) {
-        convertFrom = await eel.getFormatsICanConvertFrom(formatTitle)();
-        convertTo = await eel.getFormatsICanConvertTo(formatTitle)();
-    }
-    
-    renderBubbles('convertFromList', convertFrom);
-    renderBubbles('convertToList', convertTo);
-}
-
-function renderBubbles(containerId, formatList) {
-    const container = document.getElementById(containerId);
-    container.innerHTML = '';
-    
-    if (formatList.length === 0) {
-        container.innerHTML = '<div style="color: #666;">None</div>';
-        return;
-    }
-    
-    formatList.forEach(fmt => {
-        const bubble = document.createElement('div');
-        bubble.className = 'formatBubble';
-        bubble.textContent = fmt.toUpperCase();
-        
-        bubble.addEventListener('click', () => loadFormatInfo(fmt.toUpperCase()));
-        
-        container.appendChild(bubble);
-    });
-}
-
-function hideAllViews() {
-    document.getElementById('mainView').classList.add('hidden');
-    document.getElementById('infoView').classList.add('hidden');
-    document.getElementById('convertView').classList.add('hidden');
-    document.getElementById('otherView').classList.add('hidden');
-}
-
-function showMainView() {
-    hideAllViews();
-    document.getElementById('mainView').classList.remove('hidden');
-}
-
-document.getElementById('searchInput').addEventListener('input', handleSearch);
-document.getElementById('toggleDetailsBtn').addEventListener('click', toggleDetails);
-document.getElementById('backBtn').addEventListener('click', showMainView);
-document.getElementById('navConversions').addEventListener('click', (e) => {
-    e.preventDefault();
-    showMainView();
-});
-
 let currentSelectedFiles = [];
 let possibleConvertTargets = [];
 let selectedTargetFormat = "";
 let customSaveFolderPath = "";
 let systemDownloadsPath = "";
 let scriptFolderPath = "";
+let startupFilePollTimer = null;
+let lastStartupFileSignature = "";
 
 async function initializeApp() {
     if (window.eel) {
@@ -175,18 +44,60 @@ async function initializeApp() {
         customSaveFolderPath = savedCustomPath;
     }
     
+    const savedBg = localStorage.getItem('backgroundModePref') || 'no';
+    const bgModeSelect = document.getElementById('backgroundModeSelect');
+    if (bgModeSelect) bgModeSelect.value = savedBg;
+    if (window.eel) eel.setBackgroundMode(savedBg === 'yes');
+
+    const savedCtx = localStorage.getItem('contextMenuPref') || 'no';
+    const ctxMenuSelect = document.getElementById('contextMenuSelect');
+    if (ctxMenuSelect) ctxMenuSelect.value = savedCtx;
+    if (window.eel) {
+        try {
+            await eel.toggleRegistryContextMenu(savedCtx === 'yes')();
+        } catch (err) {
+            console.warn('Failed to reapply saved context-menu preference:', err);
+        }
+    }
+
     renderGrid(allFormats);
     updatePathDisplay();
+
+    if (window.eel) {
+        const startupFiles = await eel.getStartupFiles()();
+        if (startupFiles && startupFiles.length > 0) {
+            hideAllViews();
+            document.getElementById('convertView').classList.remove('hidden');
+            await processSelectedFiles(startupFiles);
+        }
+
+        if (!startupFilePollTimer) {
+            startupFilePollTimer = setInterval(async () => {
+                try {
+                    const queuedFiles = await eel.getStartupFiles()();
+                    const signature = queuedFiles && queuedFiles.length > 0 ? queuedFiles.join('|') : "";
+                    if (signature && signature !== lastStartupFileSignature) {
+                        lastStartupFileSignature = signature;
+                        hideAllViews();
+                        document.getElementById('convertView').classList.remove('hidden');
+                        await processSelectedFiles(queuedFiles);
+                        await eel.clearStartupFiles()();
+                        lastStartupFileSignature = "";
+                    }
+                } catch (err) {
+                    console.warn('Startup file poll failed:', err);
+                }
+            }, 1000);
+        }
+    }
 }
 
 function updatePathDisplay() {
     const pathDisplay = document.getElementById('saveLocationPath');
     const convertPathDisplay = document.getElementById('convertSavePathText');
-    
     const val = document.getElementById('saveLocationSelect') ? document.getElementById('saveLocationSelect').value : 'downloads';
     
     let pathString = "";
-    
     if (val === 'downloads') {
         pathString = systemDownloadsPath;
     } else if (val === 'scriptFolder') {
@@ -201,6 +112,137 @@ function updatePathDisplay() {
     if (convertPathDisplay) {
         convertPathDisplay.textContent = "Files will be saved to: " + pathString;
     }
+}
+
+function renderGrid(dataToRender) {
+    const gridElement = document.getElementById('formatGrid');
+    if (!gridElement) return;
+    gridElement.innerHTML = '';
+    
+    if (detailsVisible) {
+        gridElement.classList.add('formatGridExpanded');
+    } else {
+        gridElement.classList.remove('formatGridExpanded');
+    }
+    
+    dataToRender.forEach(formatObj => {
+        const card = document.createElement('div');
+        let cardClass = 'formatCard';
+        if (detailsVisible) {
+            cardClass += ' formatCardExpanded';
+        }
+        card.className = cardClass;
+        card.addEventListener('click', () => loadFormatInfo(formatObj.title));
+        
+        const title = document.createElement('div');
+        title.className = 'cardTitle';
+        title.textContent = formatObj.title;
+        
+        const description = document.createElement('div');
+        let descClass = 'cardDescription';
+        if (detailsVisible) {
+            descClass += ' cardDescriptionVisible cardDescriptionTruncate';
+        }
+        description.className = descClass;
+        description.textContent = formatObj.description;
+        
+        card.appendChild(title);
+        card.appendChild(description);
+        gridElement.appendChild(card);
+    });
+}
+
+async function loadFormatInfo(formatTitle) {
+    hideAllViews();
+    document.getElementById('infoView').classList.remove('hidden');
+    
+    const formatObj = allFormats.find(f => f.title === formatTitle);
+    document.getElementById('infoTitle').textContent = formatTitle;
+    document.getElementById('infoDesc').textContent = formatObj ? formatObj.description : "No description available.";
+    
+    let convertFrom = [];
+    let convertTo = [];
+    
+    if (window.eel) {
+        convertFrom = await eel.getFormatsICanConvertFrom(formatTitle)();
+        convertTo = await eel.getFormatsICanConvertTo(formatTitle)();
+    }
+    
+    renderBubbles('convertFromList', convertFrom);
+    renderBubbles('convertToList', convertTo);
+}
+
+function renderBubbles(containerId, formatList) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+    
+    if (formatList.length === 0) {
+        container.innerHTML = '<div style="color: #666;">None</div>';
+        return;
+    }
+    
+    formatList.forEach(fmt => {
+        const bubble = document.createElement('div');
+        bubble.className = 'formatBubble';
+        bubble.textContent = fmt.toUpperCase();
+        bubble.addEventListener('click', () => loadFormatInfo(fmt.toUpperCase()));
+        container.appendChild(bubble);
+    });
+}
+
+function handleSearch() {
+    const searchInput = document.getElementById('searchInput');
+    if (!searchInput) return;
+    const searchTerm = searchInput.value.toLowerCase();
+    const filteredData = allFormats.filter(formatObj => {
+        const titleMatch = formatObj.title.toLowerCase().includes(searchTerm);
+        const descMatch = formatObj.description.toLowerCase().includes(searchTerm);
+        return titleMatch || descMatch;
+    });
+    renderGrid(filteredData);
+}
+
+function toggleDetails() {
+    detailsVisible = !detailsVisible;
+    const btn = document.getElementById('toggleDetailsBtn');
+    if (btn) {
+        if (detailsVisible) {
+            btn.textContent = 'Hide Details';
+        } else {
+            btn.textContent = 'Show Details';
+        }
+    }
+    handleSearch();
+}
+
+function hideAllViews() {
+    document.getElementById('mainView').classList.add('hidden');
+    document.getElementById('infoView').classList.add('hidden');
+    document.getElementById('convertView').classList.add('hidden');
+    document.getElementById('otherView').classList.add('hidden');
+}
+
+function showMainView() {
+    hideAllViews();
+    document.getElementById('mainView').classList.remove('hidden');
+}
+
+const searchInput = document.getElementById('searchInput');
+if (searchInput) searchInput.addEventListener('input', handleSearch);
+
+const toggleDetailsBtn = document.getElementById('toggleDetailsBtn');
+if (toggleDetailsBtn) toggleDetailsBtn.addEventListener('click', toggleDetails);
+
+const backBtn = document.getElementById('backBtn');
+if (backBtn) backBtn.addEventListener('click', showMainView);
+
+const navConversionsBtn = document.getElementById('navConversions');
+if (navConversionsBtn) {
+    navConversionsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        showMainView();
+    });
 }
 
 const navConvertBtn = document.getElementById('navConvert');
@@ -221,7 +263,7 @@ if (navOtherBtn) {
     });
 }
 
-const selectFilesBtn = document.getElementById('selectFilesBtn') || document.getElementById('selectFilesText');
+const selectFilesBtn = document.getElementById('selectFilesText');
 if (selectFilesBtn) {
     selectFilesBtn.addEventListener('click', async () => {
         if (window.eel) {
@@ -237,15 +279,12 @@ async function processSelectedFiles(paths) {
     if (paths.length === 0) return;
     
     let commonTargets = null;
-
     for (let path of paths) {
         let ext = path.split('.').pop().toLowerCase();
         let targetsForFile = [];
-
         if (window.eel) {
             targetsForFile = await eel.getFormatsICanConvertTo(ext)();
         }
-
         if (commonTargets === null) {
             commonTargets = targetsForFile;
         } else {
@@ -260,6 +299,7 @@ async function processSelectedFiles(paths) {
 
     currentSelectedFiles = paths;
     selectedTargetFormat = "";
+    
     const listElement = document.getElementById('selectedFilesList');
     if (listElement) {
         listElement.innerHTML = '';
@@ -289,12 +329,10 @@ function renderConvertTargets(targetsToRender) {
         }
         bubble.className = bubbleClass;
         bubble.textContent = fmt.title;
-        
         bubble.addEventListener('click', () => {
             selectedTargetFormat = fmt.title;
             renderConvertTargets(targetsToRender);
         });
-        
         container.appendChild(bubble);
     });
 }
@@ -303,19 +341,16 @@ const convertSearchInput = document.getElementById('convertSearchInput');
 if (convertSearchInput) {
     convertSearchInput.addEventListener('input', (e) => {
         const term = e.target.value.toLowerCase();
-        
         let filtered = possibleConvertTargets.filter(fmt => {
             const titleMatch = fmt.title.toLowerCase().includes(term);
             const descMatch = fmt.description.toLowerCase().includes(term);
             return titleMatch || descMatch;
         });
-        
         filtered.sort((a, b) => {
             const aTitleMatch = a.title.toLowerCase().includes(term) ? 1 : 0;
             const bTitleMatch = b.title.toLowerCase().includes(term) ? 1 : 0;
             return bTitleMatch - aTitleMatch;
         });
-        
         renderConvertTargets(filtered);
     });
 }
@@ -323,14 +358,8 @@ if (convertSearchInput) {
 const executeConvertBtn = document.getElementById('executeConvertBtn');
 if (executeConvertBtn) {
     executeConvertBtn.addEventListener('click', async () => {
-        if (currentSelectedFiles.length === 0) {
-            alert("Please select files first.");
-            return;
-        }
-        if (!selectedTargetFormat) {
-            alert("Please select a format to convert to.");
-            return;
-        }
+        if (currentSelectedFiles.length === 0) return;
+        if (!selectedTargetFormat) return;
         
         const statusMsg = document.getElementById('convertStatusMessage');
         statusMsg.textContent = "converting...";
@@ -339,7 +368,6 @@ if (executeConvertBtn) {
         if (window.eel) {
             const saveLocType = document.getElementById('saveLocationSelect').value;
             const result = await eel.executeConversion(currentSelectedFiles, selectedTargetFormat, saveLocType, customSaveFolderPath)();
-            
             if (result.status === 'success') {
                 statusMsg.textContent = result.message;
                 statusMsg.className = "convertStatus statusSuccess";
@@ -399,6 +427,40 @@ if (saveLocationSelect) {
             localStorage.setItem('saveLocationPref', e.target.value);
         }
         updatePathDisplay();
+    });
+}
+
+const backgroundModeSelect = document.getElementById('backgroundModeSelect');
+if (backgroundModeSelect) {
+    backgroundModeSelect.addEventListener('change', (e) => {
+        localStorage.setItem('backgroundModePref', e.target.value);
+        if (window.eel) eel.setBackgroundMode(e.target.value === 'yes');
+    });
+}
+
+const contextMenuSelect = document.getElementById('contextMenuSelect');
+const settingsStatusMessage = document.getElementById('settingsStatusMessage');
+if (contextMenuSelect) {
+    contextMenuSelect.addEventListener('change', async (e) => {
+        if (window.eel) {
+            settingsStatusMessage.textContent = "Updating registry...";
+            settingsStatusMessage.style.color = "#ffaa00";
+            
+            const result = await eel.toggleRegistryContextMenu(e.target.value === 'yes')();
+            const success = result[0];
+            const errMsg = result[1];
+            
+            if (success) {
+                localStorage.setItem('contextMenuPref', e.target.value);
+                settingsStatusMessage.textContent = "Registry updated successfully.";
+                settingsStatusMessage.style.color = "#00dd55";
+            } else {
+                settingsStatusMessage.textContent = "Failed: " + errMsg;
+                settingsStatusMessage.style.color = "#ff3333";
+                contextMenuSelect.value = localStorage.getItem('contextMenuPref') || 'no';
+            }
+            setTimeout(() => { settingsStatusMessage.textContent = ""; }, 3000);
+        }
     });
 }
 

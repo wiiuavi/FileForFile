@@ -93,6 +93,23 @@
                 </select>
             </div>
             <div id="saveLocationPath" class="settingPathDisplay"></div>
+            <div class="settingRow">
+                <span class="settingLabel">Keep script running when page is closed</span>
+                <select id="backgroundModeSelect" class="settingSelect">
+                    <option value="no">No, close completely</option>
+                    <option value="yes">Yes, stay in system tray</option>
+                </select>
+            </div>
+            <div class="settingRow">
+                <span class="settingLabel">File Explorer Integration</span>
+                <div style="text-align: right;">
+                    <select id="contextMenuSelect" class="settingSelect">
+                        <option value="no">Disabled</option>
+                        <option value="yes">Enabled (Add to Right-Click Menu)</option>
+                    </select>
+                    <div id="settingsStatusMessage" class="settingPathDisplay" style="color: #ffaa00; margin-top: 5px;"></div>
+                </div>
+            </div>
         </div>
     </div>
 
