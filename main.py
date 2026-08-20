@@ -8,6 +8,7 @@ import json
 import time
 import winreg
 import ctypes
+import subprocess
 import pandas as pd
 from PIL import Image
 import docx2pdf
@@ -16,6 +17,8 @@ import pdfkit
 import imgkit
 import eel
 import moviepy
+import uuid
+from datetime import datetime
 
 try:
     import pystray
@@ -28,6 +31,7 @@ keepBackground = False
 trayIcon = None
 startupSelectedFiles = []
 startupQueueFile = os.path.join(tempfile.gettempdir(), "FileForFile-startup.json")
+historyFile = "history.json"
 
 IMAGE_FORMATS = {"jpg", "jpeg", "png", "webp", "bmp", "gif", "tiff", "ico"}
 VIDEO_FORMATS = {"mp4", "avi", "mkv", "mov", "webm"}
@@ -131,6 +135,47 @@ def watchStartupQueue():
         except Exception:
             time.sleep(0.5)
 
+def loadHistory():
+    if os.path.exists(historyFile):
+        try:
+            with open(historyFile, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return []
+    return []
+
+def saveHistory(data):
+    with open(historyFile, 'w', encoding='utf-8') as f:
+        json.dump(data, f)
+
+@eel.expose
+def getHistory():
+    return loadHistory()
+
+@eel.expose
+def deleteHistoryRecord(recordId):
+    hist = loadHistory()
+    hist = [h for h in hist if h['id'] != recordId]
+    saveHistory(hist)
+    return True
+
+@eel.expose
+def checkFilesExist(paths):
+    return {p: os.path.exists(p) for p in paths}
+
+@eel.expose
+def openFile(filePath):
+    try:
+        if platform.system() == 'Windows':
+            os.startfile(filePath)
+        elif platform.system() == 'Darwin':
+            subprocess.call(('open', filePath))
+        else:
+            subprocess.call(('xdg-open', filePath))
+        return True
+    except Exception:
+        return False
+
 conversionGraph = {
     "docx": ["pdf", "txt"],
     "xlsx": ["csv", "json"],
@@ -158,10 +203,33 @@ conversionGraph = {
 }
 
 formatDescriptions = {
-    "pdf": "Portable Document Format",
-    "mp3": "Standard audio file",
-    "docx": "Word document"
-}
+    "docx": "Microslop Word Open XML Document. The default file format for MS Word, can hold basically anything: images, text, tables, etc.", 
+    "pdf": "Portable Document Format. Made by Adobe and is a good all-rounder.", 
+    "txt": "Plain text file, nothing else.", 
+    "pptx": "Microslop PowerPoint Open XML Presentation. They love their XML.", 
+    "rtf": "Rich Text Format. Document format developed by Microslop for cross-platform doc interchange. Middle ground between DOCX and TXT.", 
+    "md": "Markdown file. Also plain text, but allows the use of simple syntax like _ or ** to format text.", 
+    "xlsx": "Microslop Excel Open XML (ofc) spreadsheet. Standard spreadsheet format for Excel.", 
+    "csv": "Comma-Separated Values. Plain text file with a fancy name, indicating that there is a set of data separated using newlines and commas.", 
+    "json": "JavaScript Object Notation. Human-readable data format usually used to transmit data between server and web application in key-value pairs.", 
+    "jpg": "Joint Photographic Experts Group. Lossy compression image format.", 
+    "jpeg": "Joint Photographic Experts Group. Lossy compression image format.", 
+    "png": "Portable Network Graphics. Lossless image format supporting transparent backgrounds.", 
+    "webp": "Web photo? Made by Google.", 
+    "bmp": "Bitmap image file. No, nothing to do with your Bitmoji.", 
+    "gif": "Graphics Interchange Format. Bitmap format with up to 256 colors per frame.", 
+    "tiff": "Tagged Image File Format. High-quality raster image, hence popular among artists and photographers.", 
+    "ico": "Icon file, like the anvil that opens this program!", 
+    "mp4": "MPEG-4 Part 14 (what?). Stores audio, video, and subtitles!", 
+    "avi": "(Not the AVI in wiiuavi) Audio Video Interleave. Introduced by Microslop, storing video and audio in 1 file.", 
+    "mkv": "Matroska Video. Can hold unlimited audio, video, picture, or subtitle tracks in 1 file!", 
+    "mov": "QuickTime Movie. Made by Apple (and therefore proprietary); container used for video, audio, and text playback.", 
+    "webm": "(Web media?) An open media file format designed for the web, backed by Google to provide efficient video streaming.", 
+    "mp3": "MPEG-1 Audio Layer III (what?). The most common lossy audio coding format.", 
+    "wav": "Waveform Audio File Format. Uncompressed, raw audio format made by Microsoft and IBM; high quality for high (storage) cost.", 
+    "ogg": "Ogg Vorbis Audio. Open-source, patent-free audio container.", 
+    "flac": "Free Lossless Audio Codec. Open-source coding format that compresses digital audio losslessly." 
+};
 
 @eel.expose
 def toggleRegistryContextMenu(enable):
@@ -404,6 +472,8 @@ def executeConversion(filePaths, targetFormat, saveLocationType, customPath):
         audioFormats = ['mp3', 'wav', 'ogg', 'flac']
         textFormats = ['txt', 'md', 'csv', 'json', 'html', 'rtf', 'docx', 'xlsx']
         
+        successfulConversions = []
+        
         for path in filePaths:
             fileName = os.path.basename(path)
             baseName = os.path.splitext(fileName)[0]
@@ -430,8 +500,26 @@ def executeConversion(filePaths, targetFormat, saveLocationType, customPath):
             elif inExt == 'gif' and targetFormat in videoFormats:
                 success, errMsg = convertVideoToVideo(path, outputFile)
             
-            if not success:
+            if success:
+                successfulConversions.append({
+                    "originalPath": path,
+                    "originalType": inExt,
+                    "finalPath": outputFile,
+                    "finalType": targetFormat
+                })
+            else:
                 return {'status': 'error', 'message': f'Failed {fileName}: {errMsg}'}
+                
+        if len(successfulConversions) > 0:
+            hist = loadHistory()
+            record = {
+                "id": str(uuid.uuid4()),
+                "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "type": "bulk" if len(successfulConversions) > 1 else "single",
+                "files": successfulConversions
+            }
+            hist.insert(0, record)
+            saveHistory(hist)
                 
         return {'status': 'success', 'message': 'Conversion successful!'}
     except Exception as e:

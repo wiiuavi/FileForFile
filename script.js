@@ -8,6 +8,9 @@ let systemDownloadsPath = "";
 let scriptFolderPath = "";
 let startupFilePollTimer = null;
 let lastStartupFileSignature = "";
+let historyData = [];
+let currentHistoryPage = 1;
+const historyItemsPerPage = 30;
 
 async function initializeApp() {
     if (window.eel) {
@@ -16,9 +19,31 @@ async function initializeApp() {
         scriptFolderPath = await eel.getScriptPath()();
     } else {
         allFormats = [
-            {title: "PDF", description: "Portable Document Format"},
-            {title: "MP3", description: "Standard audio file"},
-            {title: "DOCX", description: "Word document"}
+    {title: "DOCX", description: "Microslop Word Open XML Document. The default file format for MS Word, can hold basically anything: images, text, tables, etc."},
+    {title: "PDF", description: "Portable Document Format. Made by Adobe and is a good all-rounder."},
+    {title: "TXT", description: "Plain text file, nothing else."},
+    {title: "PPTX", description: "Microslop PowerPoint Open XML Presentation. They love their XML."},
+    {title: "RTF", description: "Rich Text Format. Document format developed by Microslop for cross-platform doc interchange. Middle ground between DOCX and TXT."},
+    {title: "MD", description: "Markdown file. Also plain text, but allows the use of simple syntax like _ or ** to format text."},
+    {title: "XLSX", description: "Microslop Excel Open XML (ofc) spreadsheet. Standard spreadsheet format for Excel."},
+    {title: "CSV", description: "Comma-Separated Values. Plain text file with a fancy name, indicating that there is a set of data separated using newlines and commas."},
+    {title: "JSON", description: "JavaScript Object Notation. Human-readable data format usually used to transmit data between server and web application in key-value pairs."},
+    {title: "JPG/JPEG", description: "Joint Photographic Experts Group. Lossy compression image format."},
+    {title: "PNG", description: "Portable Network Graphics. Lossless image format supporting transparent backgrounds."},
+    {title: "WEBP", description: "Web photo? Made by Google."},
+    {title: "BMP", description: "Bitmap image file. No, nothing to do with your Bitmoji."},
+    {title: "GIF", description: "Graphics Interchange Format. Bitmap format with up to 256 colors per frame."},
+    {title: "TIFF", description: "Tagged Image File Format. High-quality raster image, hence popular among artists and photographers."},
+    {title: "ICO", description: "Icon file, like the anvil that opens this program!"},
+    {title: "MP4", description: "MPEG-4 Part 14 (what?). Stores audio, video, and subtitles!"},
+    {title: "AVI", description: "(Not the AVI in wiiuavi) Audio Video Interleave. Introduced by Microslop, storing video and audio in 1 file."},
+    {title: "MKV", description: "Matroska Video. Can hold unlimited audio, video, picture, or subtitle tracks in 1 file!"},
+    {title: "MOV", description: "QuickTime Movie. Made by Apple (and therefore proprietary); container used for video, audio, and text playback."},
+    {title: "WEBM", description: "(Web media?) An open media file format designed for the web, backed by Google to provide efficient video streaming."},
+    {title: "MP3", description: "MPEG-1 Audio Layer III (what?). The most common lossy audio coding format."},
+    {title: "WAV", description: "Waveform Audio File Format. Uncompressed, raw audio format made by Microsoft and IBM; high quality for high (storage) cost."},
+    {title: "OGG", description: "Ogg Vorbis Audio. Open-source, patent-free audio container."},
+    {title: "FLAC", description: "Free Lossless Audio Codec. Open-source coding format that compresses digital audio losslessly."}
         ];
     }
     
@@ -68,7 +93,7 @@ async function initializeApp() {
         if (startupFiles && startupFiles.length > 0) {
             hideAllViews();
             document.getElementById('convertView').classList.remove('hidden');
-            await processSelectedFiles(startupFiles);
+            await addSelectedFiles(startupFiles);
         }
 
         if (!startupFilePollTimer) {
@@ -80,7 +105,7 @@ async function initializeApp() {
                         lastStartupFileSignature = signature;
                         hideAllViews();
                         document.getElementById('convertView').classList.remove('hidden');
-                        await processSelectedFiles(queuedFiles);
+                        await addSelectedFiles(queuedFiles);
                         await eel.clearStartupFiles()();
                         lastStartupFileSignature = "";
                     }
@@ -191,6 +216,143 @@ function renderBubbles(containerId, formatList) {
     });
 }
 
+async function fetchAndRenderHistory() {
+    if (window.eel) {
+        historyData = await eel.getHistory()();
+        if (historyData) {
+            historyData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        } else {
+            historyData = [];
+        }
+    }
+    currentHistoryPage = 1;
+    renderHistoryPage();
+}
+
+async function renderHistoryPage() {
+    const container = document.getElementById('historyListContainer');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    const totalPages = Math.ceil(historyData.length / historyItemsPerPage) || 1;
+    if (currentHistoryPage > totalPages) currentHistoryPage = totalPages;
+    if (currentHistoryPage < 1) currentHistoryPage = 1;
+    
+    document.getElementById('histPageInput').value = currentHistoryPage;
+    document.getElementById('histTotalPages').textContent = 'of ' + totalPages;
+    
+    const startIndex = (currentHistoryPage - 1) * historyItemsPerPage;
+    const endIndex = startIndex + historyItemsPerPage;
+    const pageData = historyData.slice(startIndex, endIndex);
+    
+    let checkElements = [];
+    
+    pageData.forEach(record => {
+        const recordDiv = document.createElement('div');
+        recordDiv.className = 'historyRecord';
+        
+        if (record.type === 'bulk') {
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'bulkHeader';
+            
+            const infoSpan = document.createElement('span');
+            infoSpan.textContent = record.date + ' - Bulk Conversion (' + record.files.length + ' files)';
+            
+            const expandBtn = document.createElement('button');
+            expandBtn.className = 'toggleButton';
+            expandBtn.textContent = 'Expand';
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'deleteBtn toggleButton';
+            deleteBtn.textContent = 'Delete';
+            deleteBtn.addEventListener('click', () => deleteHistoryRecord(record.id));
+            
+            headerDiv.appendChild(infoSpan);
+            headerDiv.appendChild(expandBtn);
+            headerDiv.appendChild(deleteBtn);
+            
+            const listDiv = document.createElement('div');
+            listDiv.className = 'bulkList hidden';
+            
+            record.files.forEach(fileData => {
+                const rowData = createFileRow(fileData);
+                listDiv.appendChild(rowData.rowDiv);
+                checkElements.push({ path: fileData.finalPath, element: rowData.openBtn });
+            });
+            
+            expandBtn.addEventListener('click', () => {
+                listDiv.classList.toggle('hidden');
+                expandBtn.textContent = listDiv.classList.contains('hidden') ? 'Expand' : 'Collapse';
+            });
+            
+            recordDiv.appendChild(headerDiv);
+            recordDiv.appendChild(listDiv);
+        } else {
+            const fileData = record.files[0];
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'singleRecordInfo';
+            
+            const dateSpan = document.createElement('span');
+            dateSpan.textContent = record.date;
+            infoDiv.appendChild(dateSpan);
+            
+            const rowData = createFileRow(fileData);
+            infoDiv.appendChild(rowData.rowDiv);
+            checkElements.push({ path: fileData.finalPath, element: rowData.openBtn });
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'deleteBtn toggleButton';
+            deleteBtn.textContent = 'Delete';
+            deleteBtn.addEventListener('click', () => deleteHistoryRecord(record.id));
+            
+            recordDiv.appendChild(infoDiv);
+            recordDiv.appendChild(deleteBtn);
+        }
+        container.appendChild(recordDiv);
+    });
+    
+    if (window.eel && checkElements.length > 0) {
+        const uniquePaths = [...new Set(checkElements.map(x => x.path))];
+        const existMap = await eel.checkFilesExist(uniquePaths)();
+        
+        checkElements.forEach(item => {
+            const exists = existMap[item.path];
+            if (exists) {
+                item.element.textContent = 'Open';
+                item.element.classList.remove('disabledBtn');
+                item.element.addEventListener('click', () => eel.openFile(item.path)());
+            } else {
+                item.element.textContent = 'file not found';
+                item.element.classList.add('disabledBtn');
+                item.element.disabled = true;
+            }
+        });
+    }
+}
+
+function createFileRow(fileData) {
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'historyFileRow';
+    
+    const detailsSpan = document.createElement('span');
+    detailsSpan.textContent = `${fileData.originalPath} (${fileData.originalType}) -> ${fileData.finalPath} (${fileData.finalType})`;
+    
+    const openBtn = document.createElement('button');
+    openBtn.className = 'openBtn toggleButton disabledBtn';
+    openBtn.textContent = 'Loading...';
+    
+    rowDiv.appendChild(detailsSpan);
+    rowDiv.appendChild(openBtn);
+    return { rowDiv, openBtn };
+}
+
+async function deleteHistoryRecord(recordId) {
+    if (window.eel) {
+        await eel.deleteHistoryRecord(recordId)();
+        fetchAndRenderHistory();
+    }
+}
+
 function handleSearch() {
     const searchInput = document.getElementById('searchInput');
     if (!searchInput) return;
@@ -221,6 +383,7 @@ function hideAllViews() {
     document.getElementById('infoView').classList.add('hidden');
     document.getElementById('convertView').classList.add('hidden');
     document.getElementById('otherView').classList.add('hidden');
+    document.getElementById('historyView').classList.add('hidden');
 }
 
 function showMainView() {
@@ -236,6 +399,16 @@ if (toggleDetailsBtn) toggleDetailsBtn.addEventListener('click', toggleDetails);
 
 const backBtn = document.getElementById('backBtn');
 if (backBtn) backBtn.addEventListener('click', showMainView);
+
+const navHistoryBtn = document.getElementById('navHistory');
+if (navHistoryBtn) {
+    navHistoryBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        hideAllViews();
+        document.getElementById('historyView').classList.remove('hidden');
+        fetchAndRenderHistory();
+    });
+}
 
 const navConversionsBtn = document.getElementById('navConversions');
 if (navConversionsBtn) {
@@ -263,23 +436,62 @@ if (navOtherBtn) {
     });
 }
 
+const histFirstBtn = document.getElementById('histFirstBtn');
+if (histFirstBtn) histFirstBtn.addEventListener('click', () => { currentHistoryPage = 1; renderHistoryPage(); });
+
+const histPrevBtn = document.getElementById('histPrevBtn');
+if (histPrevBtn) histPrevBtn.addEventListener('click', () => { currentHistoryPage--; renderHistoryPage(); });
+
+const histNextBtn = document.getElementById('histNextBtn');
+if (histNextBtn) histNextBtn.addEventListener('click', () => { currentHistoryPage++; renderHistoryPage(); });
+
+const histLastBtn = document.getElementById('histLastBtn');
+if (histLastBtn) histLastBtn.addEventListener('click', () => { currentHistoryPage = Math.ceil(historyData.length / historyItemsPerPage) || 1; renderHistoryPage(); });
+
+const histPageInput = document.getElementById('histPageInput');
+if (histPageInput) histPageInput.addEventListener('change', (e) => { currentHistoryPage = parseInt(e.target.value) || 1; renderHistoryPage(); });
+
+
 const selectFilesBtn = document.getElementById('selectFilesText');
 if (selectFilesBtn) {
     selectFilesBtn.addEventListener('click', async () => {
         if (window.eel) {
             const filePaths = await eel.askForFiles()();
             if (filePaths && filePaths.length > 0) {
-                processSelectedFiles(filePaths);
+                addSelectedFiles(filePaths);
             }
         }
     });
 }
 
-async function processSelectedFiles(paths) {
-    if (paths.length === 0) return;
+async function addSelectedFiles(paths) {
+    if (!paths || paths.length === 0) return;
     
+    let added = false;
+    paths.forEach(p => {
+        if (!currentSelectedFiles.includes(p)) {
+            currentSelectedFiles.push(p);
+            added = true;
+        }
+    });
+
+    if (added) {
+        await updateConversionTargets();
+    }
+}
+
+async function updateConversionTargets() {
+    renderSelectedFilesList();
+    
+    if (currentSelectedFiles.length === 0) {
+        possibleConvertTargets = [];
+        renderConvertTargets([]);
+        selectedTargetFormat = "";
+        return;
+    }
+
     let commonTargets = null;
-    for (let path of paths) {
+    for (let path of currentSelectedFiles) {
         let ext = path.split('.').pop().toLowerCase();
         let targetsForFile = [];
         if (window.eel) {
@@ -293,27 +505,45 @@ async function processSelectedFiles(paths) {
     }
 
     if (!commonTargets || commonTargets.length === 0) {
-        alert("no common file type to convert to");
+        possibleConvertTargets = [];
+        renderConvertTargets([]);
         return;
     }
 
-    currentSelectedFiles = paths;
-    selectedTargetFormat = "";
+    possibleConvertTargets = allFormats.filter(f => commonTargets.includes(f.title.toLowerCase()));
     
-    const listElement = document.getElementById('selectedFilesList');
-    if (listElement) {
-        listElement.innerHTML = '';
-        paths.forEach(p => {
-            let name = p.split('\\').pop().split('/').pop();
-            let el = document.createElement('div');
-            el.className = 'fileItem';
-            el.textContent = name;
-            listElement.appendChild(el);
-        });
+    if (selectedTargetFormat && !commonTargets.includes(selectedTargetFormat.toLowerCase())) {
+        selectedTargetFormat = "";
     }
 
-    possibleConvertTargets = allFormats.filter(f => commonTargets.includes(f.title.toLowerCase()));
     renderConvertTargets(possibleConvertTargets);
+}
+
+function renderSelectedFilesList() {
+    const listElement = document.getElementById('selectedFilesList');
+    if (!listElement) return;
+    listElement.innerHTML = '';
+    
+    currentSelectedFiles.forEach(p => {
+        let name = p.split('\\').pop().split('/').pop();
+        let el = document.createElement('div');
+        el.className = 'fileItem';
+        
+        let nameSpan = document.createElement('span');
+        nameSpan.textContent = name;
+        
+        let removeBtn = document.createElement('span');
+        removeBtn.className = 'removeFileBtn';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.addEventListener('click', () => {
+            currentSelectedFiles = currentSelectedFiles.filter(file => file !== p);
+            updateConversionTargets();
+        });
+        
+        el.appendChild(nameSpan);
+        el.appendChild(removeBtn);
+        listElement.appendChild(el);
+    });
 }
 
 function renderConvertTargets(targetsToRender) {
@@ -393,7 +623,7 @@ if (dropZone) {
         e.preventDefault();
         dropZone.style.borderColor = '#444';
         let paths = Array.from(e.dataTransfer.files).map(f => f.name);
-        processSelectedFiles(paths);
+        addSelectedFiles(paths);
     });
 }
 

@@ -11,6 +11,7 @@
     <div class="navBar">
         <div class="navTitle">File For File</div>
         <div class="navLinks">
+            <a href="#" id="navHistory">Previous Conversions</a>
             <a href="#" id="navConversions">Conversions</a>
             <a href="#" id="navConvert">Convert</a>
             <a href="#" id="navOther">Other</a>
@@ -26,7 +27,7 @@
     </div>
 
     <div id="infoView" class="mainContainer hidden">
-        <button id="backBtn" class="toggleButton backButton">← Back to all</button>
+        <button id="backBtn" class="toggleButton backButton">&larr; Back to all</button>
         
         <div class="infoLayout">
             <div class="sidePanel">
@@ -72,6 +73,18 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <div id="historyView" class="mainContainer hidden">
+        <div class="paginationControls">
+            <button id="histFirstBtn" class="toggleButton">&laquo; First</button>
+            <button id="histPrevBtn" class="toggleButton">&lsaquo; Prev</button>
+            <input type="number" id="histPageInput" class="pageInput" min="1">
+            <span id="histTotalPages">of 1</span>
+            <button id="histNextBtn" class="toggleButton">Next &rsaquo;</button>
+            <button id="histLastBtn" class="toggleButton">Last &raquo;</button>
+        </div>
+        <div id="historyListContainer" class="historyList"></div>
     </div>
 
     <div id="otherView" class="mainContainer hidden">

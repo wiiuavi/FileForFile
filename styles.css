@@ -314,7 +314,6 @@ color: #111;
 padding: 5px 0;
 word-break: break-all;
 }
-
 .convertSearch {
 width: 100%;
 margin-bottom: 20px;
@@ -361,6 +360,82 @@ margin-top: 10px;
 }
 body.lightTheme .convertSavePathDisplay {
 color: #777;
+}
+
+.historyRecord {
+border: 2px solid #444;
+border-radius: 10px;
+padding: 20px;
+background-color: #222;
+margin-bottom: 15px;
+}
+body.lightTheme .historyRecord {
+background-color: #ffffff;
+border-color: #ddd;
+}
+.bulkHeader, .singleRecordInfo {
+display: flex;
+justify-content: space-between;
+align-items: center;
+gap: 15px;
+}
+.bulkList {
+margin-top: 15px;
+padding-top: 15px;
+border-top: 1px solid #444;
+display: flex;
+flex-direction: column;
+gap: 10px;
+}
+body.lightTheme .bulkList {
+border-top-color: #ddd;
+}
+.historyFileRow {
+display: flex;
+justify-content: space-between;
+align-items: center;
+gap: 15px;
+padding: 10px;
+background-color: #2a2a2a;
+border-radius: 5px;
+}
+body.lightTheme .historyFileRow {
+background-color: #f4f4f9;
+}
+.disabledBtn {
+background-color: #555 !important;
+color: #aaa !important;
+cursor: not-allowed;
+}
+body.lightTheme .disabledBtn {
+background-color: #ccc !important;
+color: #777 !important;
+}
+.deleteBtn {
+background-color: #cc0000;
+}
+.deleteBtn:hover {
+background-color: #ff3333;
+}
+.paginationControls {
+display: flex;
+gap: 10px;
+align-items: center;
+margin-bottom: 20px;
+}
+.pageInput {
+width: 60px;
+padding: 5px;
+border-radius: 5px;
+border: 1px solid #444;
+background-color: #2a2a2a;
+color: white;
+text-align: center;
+}
+body.lightTheme .pageInput {
+background-color: #ffffff;
+color: #111;
+border-color: #ccc;
 }
 .settingsHeader {
 font-size: 2.5rem;
@@ -414,4 +489,14 @@ margin-top: -15px;
 }
 body.lightTheme .settingPathDisplay {
 color: #777;
+}
+.removeFileBtn {
+color: #ff3333;
+font-weight: bold;
+cursor: pointer;
+margin-left: 15px;
+font-size: 2rem;
+}
+.removeFileBtn:hover {
+color: #cc0000;
 }
