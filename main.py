@@ -8,7 +8,6 @@ import json
 import time
 import winreg
 import ctypes
-import base64
 import pandas as pd
 from PIL import Image
 import docx2pdf
@@ -65,6 +64,17 @@ def getContextMenuIconPath():
         return icoPath
     return pngPath
 
+def getContextMenuLabel(extension):
+    if extension in IMAGE_FORMATS:
+        return "Image Conversions"
+    if extension in VIDEO_FORMATS:
+        return "Video Conversions"
+    if extension in AUDIO_FORMATS:
+        return "Audio Conversions"
+    if extension in DOCUMENT_FORMATS:
+        return "Document Conversions"
+    return "File Conversions"
+
 @eel.expose
 def setBackgroundMode(val):
     global keepBackground
@@ -78,20 +88,6 @@ def getStartupFiles():
 def clearStartupFiles():
     global startupSelectedFiles
     startupSelectedFiles = []
-
-@eel.expose
-def saveImageFromBase64(base64Data, filename):
-    try:
-        if "," in base64Data:
-            base64Data = base64Data.split(",")[1]
-        imageData = base64.b64decode(base64Data)
-        downloadsDir = os.path.expanduser('~/Downloads')
-        filePath = os.path.join(downloadsDir, filename)
-        with open(filePath, "wb") as f:
-            f.write(imageData)
-        return True, filePath
-    except Exception as e:
-        return False, str(e)
 
 def isAppAlreadyRunning():
     try:
@@ -191,6 +187,7 @@ def toggleRegistryContextMenu(enable):
 
                 winreg.SetValue(cmdKey, "", winreg.REG_SZ, cmd)
                 winreg.CloseKey(cmdKey)
+                
                 winreg.CloseKey(key)
             else:
                 deleteRegistryKey(winreg.HKEY_CURRENT_USER, basePath)
