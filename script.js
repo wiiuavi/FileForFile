@@ -9,6 +9,17 @@ let scriptFolderPath = "";
 let startupFilePollTimer = null;
 let lastStartupFileSignature = "";
 
+let activeTool = "eyedropper";
+let imageToolsCanvas = null;
+let imageToolsContext = null;
+let overlayCanvas = null;
+let overlayContext = null;
+let originalImageObject = null;
+let isDrawingState = false;
+let startXCoordinate = 0;
+let startYCoordinate = 0;
+let cropBoxSelection = null;
+
 async function initializeApp() {
     if (window.eel) {
         allFormats = await eel.getFileFormats()();
@@ -62,6 +73,7 @@ async function initializeApp() {
 
     renderGrid(allFormats);
     updatePathDisplay();
+    setupImageTools();
 
     if (window.eel) {
         const startupFiles = await eel.getStartupFiles()();
@@ -220,6 +232,7 @@ function hideAllViews() {
     document.getElementById('mainView').classList.add('hidden');
     document.getElementById('infoView').classList.add('hidden');
     document.getElementById('convertView').classList.add('hidden');
+    document.getElementById('imageToolsView').classList.add('hidden');
     document.getElementById('otherView').classList.add('hidden');
 }
 
@@ -251,6 +264,15 @@ if (navConvertBtn) {
         e.preventDefault();
         hideAllViews();
         document.getElementById('convertView').classList.remove('hidden');
+    });
+}
+
+const navImageToolsBtn = document.getElementById('navImageTools');
+if (navImageToolsBtn) {
+    navImageToolsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        hideAllViews();
+        document.getElementById('imageToolsView').classList.remove('hidden');
     });
 }
 
@@ -462,6 +484,302 @@ if (contextMenuSelect) {
             setTimeout(() => { settingsStatusMessage.textContent = ""; }, 3000);
         }
     });
+}
+
+function setupImageTools() {
+    imageToolsCanvas = document.getElementById('imageToolsCanvas');
+    if (!imageToolsCanvas) return;
+    imageToolsContext = imageToolsCanvas.getContext('2d');
+    overlayCanvas = document.getElementById('overlayCanvas');
+    overlayContext = overlayCanvas.getContext('2d');
+
+    const selectImageBtn = document.getElementById('selectImageBtn');
+    const imageFileInput = document.getElementById('imageFileInput');
+    if (selectImageBtn && imageFileInput) {
+        selectImageBtn.addEventListener('click', () => imageFileInput.click());
+        imageFileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                loadImageFromFile(e.target.files[0]);
+            }
+        });
+    }
+
+    const pasteClipboardBtn = document.getElementById('pasteClipboardBtn');
+    if (pasteClipboardBtn) {
+        pasteClipboardBtn.addEventListener('click', handleClipboardPaste);
+    }
+    window.addEventListener('paste', handleClipboardPaste);
+
+    const toolEyedropperBtn = document.getElementById('toolEyedropperBtn');
+    const toolDrawRectBtn = document.getElementById('toolDrawRectBtn');
+    const toolCropBtn = document.getElementById('toolCropBtn');
+
+    if (toolEyedropperBtn) toolEyedropperBtn.addEventListener('click', () => setActiveTool('eyedropper'));
+    if (toolDrawRectBtn) toolDrawRectBtn.addEventListener('click', () => setActiveTool('rectangle'));
+    if (toolCropBtn) toolCropBtn.addEventListener('click', () => setActiveTool('crop'));
+
+    const toleranceRange = document.getElementById('toleranceRange');
+    const toleranceValDisplay = document.getElementById('toleranceValDisplay');
+    if (toleranceRange && toleranceValDisplay) {
+        toleranceRange.addEventListener('input', (e) => {
+            toleranceValDisplay.textContent = e.target.value;
+        });
+    }
+
+    const applyRemoveColorBtn = document.getElementById('applyRemoveColorBtn');
+    if (applyRemoveColorBtn) {
+        applyRemoveColorBtn.addEventListener('click', removeColorTransparency);
+    }
+
+    const applyCropBtn = document.getElementById('applyCropBtn');
+    if (applyCropBtn) {
+        applyCropBtn.addEventListener('click', applyCropSelection);
+    }
+
+    const resetImageBtn = document.getElementById('resetImageBtn');
+    if (resetImageBtn) {
+        resetImageBtn.addEventListener('click', resetCanvasImage);
+    }
+
+    const saveCanvasBtn = document.getElementById('saveCanvasBtn');
+    if (saveCanvasBtn) {
+        saveCanvasBtn.addEventListener('click', saveCanvasImage);
+    }
+
+    overlayCanvas.addEventListener('mousedown', handleCanvasMouseDown);
+    overlayCanvas.addEventListener('mousemove', handleCanvasMouseMove);
+    overlayCanvas.addEventListener('mouseup', handleCanvasMouseUp);
+
+    setActiveTool('eyedropper');
+}
+
+function setActiveTool(toolName) {
+    activeTool = toolName;
+    const toolEyedropperBtn = document.getElementById('toolEyedropperBtn');
+    const toolDrawRectBtn = document.getElementById('toolDrawRectBtn');
+    const toolCropBtn = document.getElementById('toolCropBtn');
+
+    if (toolEyedropperBtn) toolEyedropperBtn.classList.remove('activeToolBtn');
+    if (toolDrawRectBtn) toolDrawRectBtn.classList.remove('activeToolBtn');
+    if (toolCropBtn) toolCropBtn.classList.remove('activeToolBtn');
+
+    const transparencyOptions = document.getElementById('transparencyOptions');
+    const rectOptions = document.getElementById('rectOptions');
+    const cropOptions = document.getElementById('cropOptions');
+
+    if (transparencyOptions) transparencyOptions.classList.add('hidden');
+    if (rectOptions) rectOptions.classList.add('hidden');
+    if (cropOptions) cropOptions.classList.add('hidden');
+
+    if (toolName === 'eyedropper') {
+        if (toolEyedropperBtn) toolEyedropperBtn.classList.add('activeToolBtn');
+        if (transparencyOptions) transparencyOptions.classList.remove('hidden');
+    } else if (toolName === 'rectangle') {
+        if (toolDrawRectBtn) toolDrawRectBtn.classList.add('activeToolBtn');
+        if (rectOptions) rectOptions.classList.remove('hidden');
+    } else if (toolName === 'crop') {
+        if (toolCropBtn) toolCropBtn.classList.add('activeToolBtn');
+        if (cropOptions) cropOptions.classList.remove('hidden');
+    }
+    clearOverlayCanvas();
+}
+
+function loadImageFromFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            originalImageObject = img;
+            renderImageToCanvas(img);
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function renderImageToCanvas(img) {
+    imageToolsCanvas.width = img.width;
+    imageToolsCanvas.height = img.height;
+    overlayCanvas.width = img.width;
+    overlayCanvas.height = img.height;
+    
+    imageToolsContext.clearRect(0, 0, img.width, img.height);
+    imageToolsContext.drawImage(img, 0, 0);
+    clearOverlayCanvas();
+}
+
+function removeColorTransparency() {
+    if (!imageToolsCanvas.width) return;
+    const colorHex = document.getElementById('removeColorPicker').value;
+    const tolerance = parseInt(document.getElementById('toleranceRange').value, 10);
+    
+    const targetR = parseInt(colorHex.slice(1, 3), 16);
+    const targetG = parseInt(colorHex.slice(3, 5), 16);
+    const targetB = parseInt(colorHex.slice(5, 7), 16);
+
+    const imgData = imageToolsContext.getImageData(0, 0, imageToolsCanvas.width, imageToolsCanvas.height);
+    const data = imgData.data;
+
+    for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+
+        const diff = Math.abs(r - targetR) + Math.abs(g - targetG) + Math.abs(b - targetB);
+        if (diff <= tolerance) {
+            data[i + 3] = 0;
+        }
+    }
+    imageToolsContext.putImageData(imgData, 0, 0);
+}
+
+function handleCanvasMouseDown(e) {
+    if (!imageToolsCanvas.width) return;
+    const rect = overlayCanvas.getBoundingClientRect();
+    const scaleX = overlayCanvas.width / rect.width;
+    const scaleY = overlayCanvas.height / rect.height;
+
+    startXCoordinate = (e.clientX - rect.left) * scaleX;
+    startYCoordinate = (e.clientY - rect.top) * scaleY;
+    isDrawingState = true;
+
+    if (activeTool === 'eyedropper') {
+        const pixel = imageToolsContext.getImageData(Math.floor(startXCoordinate), Math.floor(startYCoordinate), 1, 1).data;
+        const hex = "#" + ((1 << 24) + (pixel[0] << 16) + (pixel[1] << 8) + pixel[2]).toString(16).slice(1);
+        document.getElementById('removeColorPicker').value = hex;
+        isDrawingState = false;
+    }
+}
+
+function handleCanvasMouseMove(e) {
+    if (!isDrawingState) return;
+    const rect = overlayCanvas.getBoundingClientRect();
+    const scaleX = overlayCanvas.width / rect.width;
+    const scaleY = overlayCanvas.height / rect.height;
+
+    const currentX = (e.clientX - rect.left) * scaleX;
+    const currentY = (e.clientY - rect.top) * scaleY;
+
+    clearOverlayCanvas();
+
+    if (activeTool === 'rectangle') {
+        const color = document.getElementById('rectColorPicker').value;
+        const mode = document.getElementById('rectModeSelect').value;
+        const width = parseInt(document.getElementById('rectLineWidth').value, 10);
+
+        overlayContext.strokeStyle = color;
+        overlayContext.fillStyle = color;
+        overlayContext.lineWidth = width;
+
+        const rectX = Math.min(startXCoordinate, currentX);
+        const rectY = Math.min(startYCoordinate, currentY);
+        const rectW = Math.abs(currentX - startXCoordinate);
+        const rectH = Math.abs(currentY - startYCoordinate);
+
+        if (mode === 'stroke') {
+            overlayContext.strokeRect(rectX, rectY, rectW, rectH);
+        } else {
+            overlayContext.fillRect(rectX, rectY, rectW, rectH);
+        }
+    } else if (activeTool === 'crop') {
+        const rectX = Math.min(startXCoordinate, currentX);
+        const rectY = Math.min(startYCoordinate, currentY);
+        const rectW = Math.abs(currentX - startXCoordinate);
+        const rectH = Math.abs(currentY - startYCoordinate);
+
+        cropBoxSelection = { x: rectX, y: rectY, w: rectW, h: rectH };
+
+        overlayContext.strokeStyle = "#00ffff";
+        overlayContext.lineWidth = 2;
+        overlayContext.setLineDash([6, 6]);
+        overlayContext.strokeRect(rectX, rectY, rectW, rectH);
+        overlayContext.setLineDash([]);
+    }
+}
+
+function handleCanvasMouseUp(e) {
+    if (!isDrawingState) return;
+    isDrawingState = false;
+
+    if (activeTool === 'rectangle') {
+        imageToolsContext.drawImage(overlayCanvas, 0, 0);
+        clearOverlayCanvas();
+    }
+}
+
+function applyCropSelection() {
+    if (!cropBoxSelection || cropBoxSelection.w === 0 || cropBoxSelection.h === 0) return;
+
+    const croppedData = imageToolsContext.getImageData(
+        Math.floor(cropBoxSelection.x),
+        Math.floor(cropBoxSelection.y),
+        Math.floor(cropBoxSelection.w),
+        Math.floor(cropBoxSelection.h)
+    );
+
+    imageToolsCanvas.width = cropBoxSelection.w;
+    imageToolsCanvas.height = cropBoxSelection.h;
+    overlayCanvas.width = cropBoxSelection.w;
+    overlayCanvas.height = cropBoxSelection.h;
+
+    imageToolsContext.putImageData(croppedData, 0, 0);
+    cropBoxSelection = null;
+    clearOverlayCanvas();
+}
+
+function handleClipboardPaste(e) {
+    const items = (e.clipboardData || e.originalEvent.clipboardData || event.clipboardData).items;
+    for (let item of items) {
+        if (item.type.indexOf("image") === 0) {
+            const file = item.getAsFile();
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    if (!imageToolsCanvas.width) {
+                        originalImageObject = img;
+                        renderImageToCanvas(img);
+                    } else {
+                        imageToolsContext.drawImage(img, 0, 0);
+                    }
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+}
+
+function clearOverlayCanvas() {
+    if (overlayContext && overlayCanvas) {
+        overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    }
+}
+
+function resetCanvasImage() {
+    if (originalImageObject) {
+        renderImageToCanvas(originalImageObject);
+    }
+}
+
+async function saveCanvasImage() {
+    if (!imageToolsCanvas.width) return;
+    const dataUrl = imageToolsCanvas.toDataURL("image/png");
+    const filename = "edited_image_" + Date.now() + ".png";
+
+    if (window.eel) {
+        const res = await eel.saveImageFromBase64(dataUrl, filename)();
+        if (res[0]) {
+            alert("Image saved successfully to Downloads!");
+        } else {
+            alert("Failed to save image: " + res[1]);
+        }
+    } else {
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = dataUrl;
+        link.click();
+    }
 }
 
 initializeApp();

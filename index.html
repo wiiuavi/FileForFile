@@ -13,6 +13,7 @@
         <div class="navLinks">
             <a href="#" id="navConversions">Conversions</a>
             <a href="#" id="navConvert">Convert</a>
+            <a href="#" id="navImageTools">Image Tools</a>
             <a href="#" id="navOther">Other</a>
         </div>
     </div>
@@ -70,6 +71,63 @@
                     <div id="convertStatusMessage" class="convertStatus"></div>
                     <div id="convertSavePathText" class="convertSavePathDisplay"></div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="imageToolsView" class="mainContainer hidden">
+        <div class="imageToolsHeader">
+            <div class="toolGroup">
+                <button id="selectImageBtn" class="toggleButton">Select Image</button>
+                <input type="file" id="imageFileInput" accept="image/*" class="hidden">
+                <button id="pasteClipboardBtn" class="toggleButton">Paste Clipboard</button>
+            </div>
+            
+            <div class="toolGroup">
+                <span class="toolLabel">Tool:</span>
+                <button id="toolEyedropperBtn" class="toolBtn">Eyedropper / Transparency</button>
+                <button id="toolDrawRectBtn" class="toolBtn">Draw Rectangle</button>
+                <button id="toolCropBtn" class="toolBtn">Crop</button>
+            </div>
+
+            <div class="toolGroup">
+                <button id="resetImageBtn" class="toggleButton backButton" style="margin-bottom:0;">Reset</button>
+                <button id="saveCanvasBtn" class="toggleButton executeBtn" style="margin-top:0;">Save Image</button>
+            </div>
+        </div>
+
+        <div id="imageToolsOptions" class="toolsOptionPanel">
+            <div id="transparencyOptions" class="optionSubPanel">
+                <span class="settingLabel">Target Color:</span>
+                <input type="color" id="removeColorPicker" value="#ffffff" class="colorInput">
+                <span class="settingLabel">Tolerance:</span>
+                <input type="range" id="toleranceRange" min="0" max="150" value="30">
+                <span id="toleranceValDisplay">30</span>
+                <button id="applyRemoveColorBtn" class="toggleButton">Remove Color</button>
+            </div>
+
+            <div id="rectOptions" class="optionSubPanel hidden">
+                <span class="settingLabel">Color:</span>
+                <input type="color" id="rectColorPicker" value="#ff0000" class="colorInput">
+                <span class="settingLabel">Mode:</span>
+                <select id="rectModeSelect" class="settingSelect">
+                    <option value="stroke">Outline</option>
+                    <option value="fill">Filled</option>
+                </select>
+                <span class="settingLabel">Width:</span>
+                <input type="number" id="rectLineWidth" min="1" max="50" value="4" class="numberInput">
+            </div>
+
+            <div id="cropOptions" class="optionSubPanel hidden">
+                <span class="settingLabel">Click and drag on image to select crop area</span>
+                <button id="applyCropBtn" class="toggleButton">Apply Crop</button>
+            </div>
+        </div>
+
+        <div id="imageCanvasWrapper" class="canvasWrapper">
+            <div class="canvasStage" id="canvasStage">
+                <canvas id="imageToolsCanvas"></canvas>
+                <canvas id="overlayCanvas"></canvas>
             </div>
         </div>
     </div>
