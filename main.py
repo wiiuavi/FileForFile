@@ -11,7 +11,7 @@ import ctypes
 import subprocess
 import pandas as pd
 from PIL import Image
-import docx2pdf
+import mammoth
 import markdown
 import pdfkit
 import imgkit
@@ -203,33 +203,10 @@ conversionGraph = {
 }
 
 formatDescriptions = {
-    "docx": "Microslop Word Open XML Document. The default file format for MS Word, can hold basically anything: images, text, tables, etc.", 
-    "pdf": "Portable Document Format. Made by Adobe and is a good all-rounder.", 
-    "txt": "Plain text file, nothing else.", 
-    "pptx": "Microslop PowerPoint Open XML Presentation. They love their XML.", 
-    "rtf": "Rich Text Format. Document format developed by Microslop for cross-platform doc interchange. Middle ground between DOCX and TXT.", 
-    "md": "Markdown file. Also plain text, but allows the use of simple syntax like _ or ** to format text.", 
-    "xlsx": "Microslop Excel Open XML (ofc) spreadsheet. Standard spreadsheet format for Excel.", 
-    "csv": "Comma-Separated Values. Plain text file with a fancy name, indicating that there is a set of data separated using newlines and commas.", 
-    "json": "JavaScript Object Notation. Human-readable data format usually used to transmit data between server and web application in key-value pairs.", 
-    "jpg": "Joint Photographic Experts Group. Lossy compression image format.", 
-    "jpeg": "Joint Photographic Experts Group. Lossy compression image format.", 
-    "png": "Portable Network Graphics. Lossless image format supporting transparent backgrounds.", 
-    "webp": "Web photo? Made by Google.", 
-    "bmp": "Bitmap image file. No, nothing to do with your Bitmoji.", 
-    "gif": "Graphics Interchange Format. Bitmap format with up to 256 colors per frame.", 
-    "tiff": "Tagged Image File Format. High-quality raster image, hence popular among artists and photographers.", 
-    "ico": "Icon file, like the anvil that opens this program!", 
-    "mp4": "MPEG-4 Part 14 (what?). Stores audio, video, and subtitles!", 
-    "avi": "(Not the AVI in wiiuavi) Audio Video Interleave. Introduced by Microslop, storing video and audio in 1 file.", 
-    "mkv": "Matroska Video. Can hold unlimited audio, video, picture, or subtitle tracks in 1 file!", 
-    "mov": "QuickTime Movie. Made by Apple (and therefore proprietary); container used for video, audio, and text playback.", 
-    "webm": "(Web media?) An open media file format designed for the web, backed by Google to provide efficient video streaming.", 
-    "mp3": "MPEG-1 Audio Layer III (what?). The most common lossy audio coding format.", 
-    "wav": "Waveform Audio File Format. Uncompressed, raw audio format made by Microsoft and IBM; high quality for high (storage) cost.", 
-    "ogg": "Ogg Vorbis Audio. Open-source, patent-free audio container.", 
-    "flac": "Free Lossless Audio Codec. Open-source coding format that compresses digital audio losslessly." 
-};
+    "pdf": "Portable Document Format",
+    "mp3": "Standard audio file",
+    "docx": "Word document"
+}
 
 @eel.expose
 def toggleRegistryContextMenu(enable):
@@ -299,6 +276,14 @@ def getFormatsICanConvertFrom(outputFormat):
             supportedInputs.append(inputType)
     return supportedInputs
 
+CODEC_MAP = {
+    'mp4': {'codec': 'libx264', 'audio_codec': 'aac'},
+    'mkv': {'codec': 'libx264', 'audio_codec': 'aac'},
+    'webm': {'codec': 'libvpx', 'audio_codec': 'libvorbis'},
+    'mov': {'codec': 'libx264', 'audio_codec': 'aac'},
+    'avi': {'codec': 'png', 'audio_codec': 'pcm_s16le'}
+}
+
 @eel.expose
 def convertImageToImage(inputFile, outputFile):
     try:
@@ -313,7 +298,31 @@ def convertImageToImage(inputFile, outputFile):
 def convertVideoToVideo(inputFile, outputFile):
     try:
         clip = moviepy.VideoFileClip(inputFile)
-        clip.write_videofile(outputFile)
+        outExt = getFileExtension(outputFile)
+        
+        kwargs = {}
+        if outExt in CODEC_MAP:
+            kwargs.update(CODEC_MAP[outExt])
+            
+        if clip.audio is None:
+            kwargs['audio'] = False
+            kwargs.pop('audio_codec', None)
+            
+        clip.write_videofile(outputFile, logger=None, **kwargs)
+        clip.close()
+        return True, ""
+    except Exception as e:
+        return False, str(e)
+
+@eel.expose
+def convertVideoToGif(inputFile, outputFile):
+    try:
+        clip = moviepy.VideoFileClip(inputFile)
+        if hasattr(clip, 'w') and clip.w and clip.w > 800:
+            clip = clip.resized(width=800) if hasattr(clip, 'resized') else clip.resize(width=800)
+            
+        clip.write_gif(outputFile, fps=15, logger=None)
+        clip.close()
         return True, ""
     except Exception as e:
         return False, str(e)
@@ -322,7 +331,8 @@ def convertVideoToVideo(inputFile, outputFile):
 def convertAudioToAudio(inputFile, outputFile):
     try:
         clip = moviepy.AudioFileClip(inputFile)
-        clip.write_audiofile(outputFile)
+        clip.write_audiofile(outputFile, logger=None)
+        clip.close()
         return True, ""
     except Exception as e:
         return False, str(e)
@@ -331,7 +341,12 @@ def convertAudioToAudio(inputFile, outputFile):
 def convertVideoToAudio(inputFile, outputFile):
     try:
         clip = moviepy.VideoFileClip(inputFile)
-        clip.audio.write_audiofile(outputFile)
+        if clip.audio is None:
+            clip.close()
+            return False, "This video file contains no audio track to extract."
+            
+        clip.audio.write_audiofile(outputFile, logger=None)
+        clip.close()
         return True, ""
     except Exception as e:
         return False, str(e)
@@ -341,7 +356,12 @@ def convertTextToText(inputFile, outputFile):
     inExt = getFileExtension(inputFile)
     outExt = getFileExtension(outputFile)
     try:
-        if inExt == 'csv' and outExt == 'xlsx':
+        if inExt == 'docx' and outExt == 'txt':
+            with open(inputFile, "rb") as docx_file:
+                result = mammoth.extract_raw_text(docx_file)
+                with open(outputFile, 'w', encoding='utf-8') as outFile:
+                    outFile.write(result.value)
+        elif inExt == 'csv' and outExt == 'xlsx':
             pd.read_csv(inputFile).to_excel(outputFile, index=False)
         elif inExt == 'xlsx' and outExt == 'csv':
             pd.read_excel(inputFile).to_csv(outputFile, index=False)
@@ -382,44 +402,56 @@ def convertHtmlToImage(inputFile, outputFile):
 def convertToPdf(inputFile, outputFile):
     inExt = getFileExtension(inputFile)
     try:
-        if inExt == 'docx':
-            docx2pdf.convert(inputFile, outputFile)
-        elif inExt in ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif', 'tiff', 'ico']:
+        if inExt in ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif', 'tiff', 'ico']:
             with Image.open(inputFile) as img:
                 rgbImg = img.convert("RGB")
                 rgbImg.save(outputFile, "PDF")
-        else:
-            pdfConfig = None
-            if platform.system() == 'Windows':
-                baseDir = os.path.dirname(os.path.abspath(__file__))
-                if getattr(sys, 'frozen', False):
-                    baseDir = os.path.dirname(sys.executable)
-                expectedPath = os.path.join(baseDir, 'bin', 'wkhtmltopdf.exe')
-                if os.path.exists(expectedPath):
-                    pdfConfig = pdfkit.configuration(wkhtmltopdf=expectedPath)
+            return True, ""
             
-            if inExt == 'md':
-                with open(inputFile, 'r', encoding='utf-8') as f:
-                    htmlText = markdown.markdown(f.read())
-                htmlWrapper = f'<html><head><meta charset="utf-8"></head><body>{htmlText}</body></html>'
-                if pdfConfig:
-                    pdfkit.from_string(htmlWrapper, outputFile, configuration=pdfConfig)
-                else:
-                    pdfkit.from_string(htmlWrapper, outputFile)
-            elif inExt == 'txt':
-                with open(inputFile, 'r', encoding='utf-8') as f:
-                    txtContent = f.read()
-                safeTxt = txtContent.replace('<', '&lt;').replace('>', '&gt;')
-                htmlWrapper = f'<html><head><meta charset="utf-8"></head><body><pre style="white-space: pre-wrap; word-wrap: break-word; font-family: sans-serif;">{safeTxt}</pre></body></html>'
-                if pdfConfig:
-                    pdfkit.from_string(htmlWrapper, outputFile, configuration=pdfConfig)
-                else:
-                    pdfkit.from_string(htmlWrapper, outputFile)
-            elif inExt in ['rtf', 'html']:
-                if pdfConfig:
-                    pdfkit.from_file(inputFile, outputFile, configuration=pdfConfig)
-                else:
-                    pdfkit.from_file(inputFile, outputFile)
+        pdfConfig = None
+        if platform.system() == 'Windows':
+            baseDir = os.path.dirname(os.path.abspath(__file__))
+            if getattr(sys, 'frozen', False):
+                baseDir = os.path.dirname(sys.executable)
+            expectedPath = os.path.join(baseDir, 'bin', 'wkhtmltopdf.exe')
+            if os.path.exists(expectedPath):
+                pdfConfig = pdfkit.configuration(wkhtmltopdf=expectedPath)
+                
+        if inExt == 'docx':
+            with open(inputFile, "rb") as docx_file:
+                result = mammoth.convert_to_html(docx_file)
+                htmlText = result.value
+            htmlWrapper = f'<html><head><meta charset="utf-8"></head><body style="font-family: sans-serif; padding: 20px;">{htmlText}</body></html>'
+            if pdfConfig:
+                pdfkit.from_string(htmlWrapper, outputFile, configuration=pdfConfig)
+            else:
+                pdfkit.from_string(htmlWrapper, outputFile)
+                
+        elif inExt == 'md':
+            with open(inputFile, 'r', encoding='utf-8') as f:
+                htmlText = markdown.markdown(f.read())
+            htmlWrapper = f'<html><head><meta charset="utf-8"></head><body style="font-family: sans-serif; padding: 20px;">{htmlText}</body></html>'
+            if pdfConfig:
+                pdfkit.from_string(htmlWrapper, outputFile, configuration=pdfConfig)
+            else:
+                pdfkit.from_string(htmlWrapper, outputFile)
+                
+        elif inExt == 'txt':
+            with open(inputFile, 'r', encoding='utf-8') as f:
+                txtContent = f.read()
+            safeTxt = txtContent.replace('<', '&lt;').replace('>', '&gt;')
+            htmlWrapper = f'<html><head><meta charset="utf-8"></head><body><pre style="white-space: pre-wrap; word-wrap: break-word; font-family: sans-serif; padding: 20px;">{safeTxt}</pre></body></html>'
+            if pdfConfig:
+                pdfkit.from_string(htmlWrapper, outputFile, configuration=pdfConfig)
+            else:
+                pdfkit.from_string(htmlWrapper, outputFile)
+                
+        elif inExt in ['rtf', 'html']:
+            if pdfConfig:
+                pdfkit.from_file(inputFile, outputFile, configuration=pdfConfig)
+            else:
+                pdfkit.from_file(inputFile, outputFile)
+                
         return True, ""
     except Exception as e:
         return False, str(e)
@@ -487,6 +519,8 @@ def executeConversion(filePaths, targetFormat, saveLocationType, customPath):
                 success, errMsg = convertToPdf(path, outputFile)
             elif inExt == 'html' and targetFormat in imageFormats:
                 success, errMsg = convertHtmlToImage(path, outputFile)
+            elif inExt in videoFormats and targetFormat == 'gif':
+                success, errMsg = convertVideoToGif(path, outputFile)
             elif inExt in imageFormats and targetFormat in imageFormats:
                 success, errMsg = convertImageToImage(path, outputFile)
             elif inExt in videoFormats and targetFormat in videoFormats:
