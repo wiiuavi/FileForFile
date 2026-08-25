@@ -27,11 +27,16 @@ except ImportError:
 
 eel.init(os.path.dirname(os.path.abspath(__file__)))
 
+if getattr(sys, 'frozen', False):
+    APP_DIR = os.path.dirname(sys.executable)
+else:
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
 keepBackground = False
 trayIcon = None
 startupSelectedFiles = []
 startupQueueFile = os.path.join(tempfile.gettempdir(), "FileForFile-startup.json")
-historyFile = "history.json"
+historyFile = os.path.join(APP_DIR, "history.json")
 
 IMAGE_FORMATS = {"jpg", "jpeg", "png", "webp", "bmp", "gif", "tiff", "ico"}
 VIDEO_FORMATS = {"mp4", "avi", "mkv", "mov", "webm"}
@@ -481,7 +486,7 @@ def getDownloadsPath():
 
 @eel.expose
 def getScriptPath():
-    return os.path.abspath(os.path.dirname(__file__))
+    return APP_DIR
 
 @eel.expose
 def executeConversion(filePaths, targetFormat, saveLocationType, customPath):
@@ -492,7 +497,7 @@ def executeConversion(filePaths, targetFormat, saveLocationType, customPath):
         if saveLocationType == 'downloads':
             outputFolder = os.path.expanduser('~/Downloads')
         elif saveLocationType == 'scriptFolder':
-            outputFolder = os.path.abspath(os.path.dirname(__file__))
+            outputFolder = APP_DIR
         elif saveLocationType == 'customFolder':
             outputFolder = customPath
             
