@@ -25,6 +25,12 @@ try:
 except ImportError:
     pystray = None
 
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, 'w')
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, 'w')
+
+
 eel.init(os.path.dirname(os.path.abspath(__file__)))
 
 if getattr(sys, 'frozen', False):
