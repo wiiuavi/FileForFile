@@ -393,6 +393,10 @@ def convertTextToText(inputFile, outputFile):
 def convertHtmlToImage(inputFile, outputFile):
     try:
         imgConfig = None
+        options = {
+            'enable-local-file-access': None 
+        }
+        
         if platform.system() == 'Windows':
             baseDir = os.path.dirname(os.path.abspath(__file__))
             if getattr(sys, 'frozen', False):
@@ -402,9 +406,9 @@ def convertHtmlToImage(inputFile, outputFile):
                 imgConfig = imgkit.config(wkhtmltoimage=expectedPath)
         
         if imgConfig:
-            imgkit.from_file(inputFile, outputFile, config=imgConfig)
+            imgkit.from_file(inputFile, outputFile, config=imgConfig, options=options)
         else:
-            imgkit.from_file(inputFile, outputFile)
+            imgkit.from_file(inputFile, outputFile, options=options)
         return True, ""
     except Exception as e:
         return False, str(e)
@@ -458,10 +462,11 @@ def convertToPdf(inputFile, outputFile):
                 pdfkit.from_string(htmlWrapper, outputFile)
                 
         elif inExt in ['rtf', 'html']:
+            options = {'enable-local-file-access': None}
             if pdfConfig:
-                pdfkit.from_file(inputFile, outputFile, configuration=pdfConfig)
+                pdfkit.from_file(inputFile, outputFile, configuration=pdfConfig, options=options)
             else:
-                pdfkit.from_file(inputFile, outputFile)
+                pdfkit.from_file(inputFile, outputFile, options=options)
                 
         return True, ""
     except Exception as e:
