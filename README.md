@@ -5,6 +5,7 @@ FileForFile is a local python based file converter **for windows**.
 Go to the releases tab, download and extract the .zip file, and run the .exe as admin. Alternatively, you can run the .py, requirements.txt is included.
 I would suggest going to settings and selecting a folder of choice (*this assumes that your downloads folder is default in windows install*), as well as turning on the windows registry feature (**This program can make changes to the registry, but is mostly tested/harmless.** *You are responsible for all actions made.*).	
 Ensure that the .exe stays in the extracted folder. Shortcuts exist if you wish to move elsewhere
+If you are not using chrome/edge then search for http://localhost:8000/index.html after running the .exe, and ensure nothing else is running on port 8000.
 **Tested in windows and made for windows only. This is intentional**
 
 
